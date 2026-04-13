@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebUSB Printer Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #00ff00;
+        }
+        button {
+            background: #00ff00;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            font-family: monospace;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #00cc00;
+        }
+        .log {
+            background: #000;
+            padding: 15px;
+            margin: 10px 0;
+            border: 1px solid #00ff00;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .error { color: #ff0000; }
+        .success { color: #00ff00; }
+        .info { color: #ffff00; }
+    </style>
+</head>
+<body>
+    <h1>🖨️ WebUSB Printer Diagnostic Tool</h1>
+    <p>This tool will help diagnose your Gprinter connection.</p>
+    
+    <div>
+        <button onclick="checkWebUSB()">1. Check WebUSB Support</button>
+        <button onclick="listDevices()">2. List Permitted Devices</button>
+        <button onclick="requestDevice()">3. Request Printer</button>
+        <button onclick="testConnection()">4. Test Connection</button>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+    
+    <div class="log" id="log"></div>
+
+    <script>
+        let device = null;
+        let endpointNumber = null;
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+            logDiv.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        function checkWebUSB() {
+            log('=== Checking WebUSB Support ===');
+            
+            if (!navigator.usb) {
+                log('❌ WebUSB is NOT supported in this browser!', 'error');
+                log('   Please use Chrome or Edge browser', 'error');
+                return false;
+            }
+            
+            log('✅ WebUSB is supported!', 'success');
+            log(`   Browser: ${navigator.userAgent}`, 'info');
+            log(`   Protocol: ${window.location.protocol}`, 'info');
+            
+            if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                log('⚠️  Warning: WebUSB requires HTTPS or localhost', 'error');
+            }
+            
+            return true;
+        }
+
+        async function listDevices() {
+            if (!checkWebUSB()) return;
+            
+            log('=== Listing Permitted USB Devices ===');
+            
+            try {
+                const devices = await navigator.usb.getDevices();
+                
+                if (devices.length === 0) {
+                    log('ℹ️  No devices have been granted permission yet', 'info');
+                    log('   Click "Request Printer" to grant permission', 'info');
+                    return;
+                }
+                
+                log(`✅ Found ${devices.length} permitted device(s):`, 'success');
+                
+                devices.forEach((dev, i) => {
+                    log(`\n📱 Device ${i + 1}:`);
+                    log(`   Vendor ID:  0x${dev.vendorId.toString(16).padStart(4, '0')} (${dev.vendorId})`);
+                    log(`   Product ID: 0x${dev.productId.toString(16).padStart(4, '0')} (${dev.productId})`);
+                    log(`   Product:    ${dev.productName || 'Unknown'}`);
+                    log(`   Manufacturer: ${dev.manufacturerName || 'Unknown'}`);
+                    log(`   Serial:     ${dev.serialNumber || 'Unknown'}`);
+                    log(`   Opened:     ${dev.opened ? 'Yes' : 'No'}`);
+                    
+                    // Check if it's the Gprinter
+                    if (dev.vendorId === 0x0471 && dev.productId === 0x0055) {
+                        log(`   🎯 This is your Gprinter!`, 'success');
+                    }
+                });
+                
+            } catch (error) {
+                log(`❌ Error listing devices: ${error.message}`, 'error');
+                log(`   ${error.stack}`, 'error');
+            }
+        }
+
+        async function requestDevice() {
+            if (!checkWebUSB()) return;
+            
+            log('=== Requesting USB Device ===');
+            log('ℹ️  A browser dialog should appear...');
+            
+            try {
+                // Disconnect any existing device first
+                if (device) {
+                    log('Disconnecting existing device...');
+                    try {
+                        await device.releaseInterface(0);
+                        await device.close();
+                    } catch (e) {
+                        log(`   Warning: ${e.message}`, 'info');
+                    }
+                    device = null;
+                    endpointNumber = null;
+                }
+                
+                // Request device with no filters (user can select any device)
+                const selectedDevice = await navigator.usb.requestDevice({
+                    filters: []
+                });
+                
+                log(`✅ Device selected!`, 'success');
+                log(`   Vendor ID:  0x${selectedDevice.vendorId.toString(16).padStart(4, '0')} (${selectedDevice.vendorId})`);
+                log(`   Product ID: 0x${selectedDevice.productId.toString(16).padStart(4, '0')} (${selectedDevice.productId})`);
+                log(`   Product:    ${selectedDevice.productName || 'Unknown'}`);
+                
+                // Open the device
+                log('Opening device...');
+                await selectedDevice.open();
+                log('✅ Device opened', 'success');
+                
+                // Select configuration
+                if (selectedDevice.configuration === null) {
+                    log('Selecting configuration 1...');
+                    await selectedDevice.selectConfiguration(1);
+                    log('✅ Configuration selected', 'success');
+                }
+                
+                // Try to reset
+                try {
+                    log('Attempting device reset...');
+                    await selectedDevice.reset();
+                    log('✅ Device reset successful', 'success');
+                } catch (e) {
+                    log(`⚠️  Reset failed (this is usually OK): ${e.message}`, 'info');
+                }
+                
+                // Claim interface
+                log('Claiming interface 0...');
+                await selectedDevice.claimInterface(0);
+                log('✅ Interface claimed', 'success');
+                
+                // Find OUT endpoint
+                const iface = selectedDevice.configuration?.interfaces[0];
+                const outEndpoint = iface?.alternates[0].endpoints.find(e => e.direction === 'out');
+                
+                if (!outEndpoint) {
+                    throw new Error('Could not find an OUT endpoint');
+                }
+                
+                log(`✅ Found OUT endpoint: ${outEndpoint.endpointNumber}`, 'success');
+                
+                device = selectedDevice;
+                endpointNumber = outEndpoint.endpointNumber;
+                
+                log('\n🎉 Device successfully connected and ready!', 'success');
+                log('   You can now click "Test Connection" to send data', 'success');
+                
+            } catch (error) {
+                if (error.name === 'NotFoundError') {
+                    log('ℹ️  User cancelled device selection', 'info');
+                    return;
+                }
+                
+                log(`❌ Connection failed: ${error.name}`, 'error');
+                log(`   Message: ${error.message}`, 'error');
+                log(`   Stack: ${error.stack}`, 'error');
+                
+                if (error.message?.includes('unable to claim interface') || 
+                    error.message?.includes('access denied') || 
+                    error.name === 'SecurityError') {
+                    log('\n💡 SOLUTION:', 'info');
+                    log('   The printer driver is blocking access.', 'info');
+                    log('   Run these commands in terminal:', 'info');
+                    log('   sudo systemctl stop cups cups.socket', 'info');
+                    log('   sudo rmmod usblp', 'info');
+                    log('   Then try again!', 'info');
+                }
+            }
+        }
+
+        async function testConnection() {
+            if (!device || !endpointNumber) {
+                log('❌ No device connected!', 'error');
+                log('   Click "Request Printer" first', 'info');
+                return;
+            }
+            
+            log('=== Testing Printer Connection ===');
+            
+            try {
+                // ESC/POS commands for a simple test print
+                const ESC = 0x1B;
+                const GS = 0x1D;
+                
+                const encoder = new TextEncoder();
+                
+                // Build test print data
+                const commands = new Uint8Array([
+                    ESC, 0x40,           // Initialize printer
+                    ESC, 0x61, 1,        // Center align
+                    ESC, 0x45, 1,        // Bold on
+                    ...encoder.encode('WebUSB Test\n'),
+                    ESC, 0x45, 0,        // Bold off
+                    ...encoder.encode('Connection Successful!\n'),
+                    ...encoder.encode('\n\n\n'),
+                    GS, 0x56, 0x00       // Cut paper
+                ]);
+                
+                log('Sending test print data...');
+                log(`   Endpoint: ${endpointNumber}`);
+                log(`   Data size: ${commands.length} bytes`);
+                
+                const result = await device.transferOut(endpointNumber, commands);
+                
+                log(`✅ Data sent successfully!`, 'success');
+                log(`   Bytes written: ${result.bytesWritten}`, 'success');
+                log(`   Status: ${result.status}`, 'success');
+                log('\n🎉 Check your printer - it should have printed!', 'success');
+                
+            } catch (error) {
+                log(`❌ Test failed: ${error.message}`, 'error');
+                log(`   ${error.stack}`, 'error');
+            }
+        }
+
+        // Auto-check on load
+        window.addEventListener('load', () => {
+            log('🖨️  WebUSB Printer Diagnostic Tool Ready');
+            log('   Click "Check WebUSB Support" to begin\n');
+        });
+    </script>
+</body>
+</html>

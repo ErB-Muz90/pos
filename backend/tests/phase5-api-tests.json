@@ -1,0 +1,216 @@
+{
+  "name": "Phase 5: Sales System API Tests",
+  "description": "Complete API test collection for Sales System",
+  "variables": {
+    "baseUrl": "http://localhost:3000",
+    "authToken": "your-jwt-token-here",
+    "branchId": "your-branch-id",
+    "productId": "your-product-id",
+    "shiftId": "shift-id-from-open",
+    "saleId": "sale-id-from-create"
+  },
+  "requests": [
+    {
+      "name": "1. Open Shift",
+      "method": "POST",
+      "url": "{{baseUrl}}/sales/shifts/open",
+      "headers": {
+        "Authorization": "Bearer {{authToken}}",
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "branchId": "{{branchId}}",
+        "openingCash": 5000
+      },
+      "tests": [
+        "Status code is 201",
+        "Response has shiftNumber",
+        "openingCash is 5000"
+      ]
+    },
+    {
+      "name": "2. Create Sale (Cash)",
+      "method": "POST",
+      "url": "{{baseUrl}}/sales",
+      "headers": {
+        "Authorization": "Bearer {{authToken}}",
+        "Content-Type": "application/json",
+        "x-idempotency-key": "test-sale-001"
+      },
+      "body": {
+        "branchId": "{{branchId}}",
+        "shiftId": "{{shiftId}}",
+        "items": [
+          {
+            "productId": "{{productId}}",
+            "quantity": 2,
+            "unitPrice": 100,
+            "taxRate": 16,
+            "discount": 0
+          }
+        ],
+        "paymentMethod": "cash",
+        "discount": 0
+      },
+      "tests": [
+        "Status code is 201",
+        "Response has receiptNumber",
+        "totalAmount is 232"
+      ]
+    },
+    {
+      "name": "3. Test Idempotency (Duplicate Sale)",
+      "method": "POST",
+      "url": "{{baseUrl}}/sales",
+      "headers": {
+        "Authorization": "Bearer {{authToken}}",
+        "Content-Type": "application/json",
+        "x-idempotency-key": "test-sale-001"
+      },
+      "body": {
+        "branchId": "{{branchId}}",
+        "shiftId": "{{shiftId}}",
+        "items": [
+          {
+            "productId": "{{productId}}",
+            "quantity": 2,
+            "unitPrice": 100,
+            "taxRate": 16
+          }
+        ],
+        "paymentMethod": "cash"
+      },
+      "tests": [
+        "Status code is 201",
+        "Returns same sale as before",
+        "No duplicate created"
+      ]
+    },
+    {
+      "name": "4. Get Sale by ID",
+      "method": "GET",
+      "url": "{{baseUrl}}/sales/{{saleId}}",
+      "headers": {
+        "Authorization": "Bearer {{authToken}}"
+      },
+      "tests": [
+        "Status code is 200",
+        "Response has items array",
+        "Response has customer info"
+      ]
+    },
+    {
+      "name": "5. List Sales",
+      "method": "GET",
+      "url": "{{baseUrl}}/sales?page=1&limit=20",
+      "headers": {
+        "Authorization": "Bearer {{authToken}}"
+      },
+      "tests": [
+        "Status code is 200",
+        "Response has data array",
+        "Response has meta object"
+      ]
+    },
+    {
+      "name": "6. Filter Sales by Date",
+      "method": "GET",
+      "url": "{{baseUrl}}/sales?startDate=2024-11-01&endDate=2024-11-05",
+      "headers": {
+        "Authorization": "Bearer {{authToken}}"
+      },
+      "tests": [
+        "Status code is 200",
+        "All sales within date range"
+      ]
+    },
+    {
+      "name": "7. Get Receipt (JSON)",
+      "method": "GET",
+      "url": "{{baseUrl}}/sales/{{saleId}}/receipt",
+      "headers": {
+        "Authorization": "Bearer {{authToken}}"
+      },
+      "tests": [
+        "Status code is 200",
+        "Response has businessName",
+        "Response has items array",
+        "Response has totals"
+      ]
+    },
+    {
+      "name": "8. Get Receipt (Text)",
+      "method": "GET",
+      "url": "{{baseUrl}}/sales/{{saleId}}/receipt/text",
+      "headers": {
+        "Authorization": "Bearer {{authToken}}"
+      },
+      "tests": [
+        "Status code is 200",
+        "Response has text field",
+        "Text contains receipt number"
+      ]
+    },
+    {
+      "name": "9. Void Sale",
+      "method": "POST",
+      "url": "{{baseUrl}}/sales/{{saleId}}/void",
+      "headers": {
+        "Authorization": "Bearer {{authToken}}",
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "reason": "Customer requested refund"
+      },
+      "tests": [
+        "Status code is 200",
+        "Sale status is void",
+        "Inventory restored"
+      ]
+    },
+    {
+      "name": "10. Get Current Shift",
+      "method": "GET",
+      "url": "{{baseUrl}}/sales/shifts/current",
+      "headers": {
+        "Authorization": "Bearer {{authToken}}"
+      },
+      "tests": [
+        "Status code is 200",
+        "Shift status is open"
+      ]
+    },
+    {
+      "name": "11. Get Shift Summary",
+      "method": "GET",
+      "url": "{{baseUrl}}/sales/shifts/{{shiftId}}",
+      "headers": {
+        "Authorization": "Bearer {{authToken}}"
+      },
+      "tests": [
+        "Status code is 200",
+        "Response has shift details",
+        "Response has paymentBreakdown",
+        "Response has sales array"
+      ]
+    },
+    {
+      "name": "12. Close Shift",
+      "method": "POST",
+      "url": "{{baseUrl}}/sales/shifts/{{shiftId}}/close",
+      "headers": {
+        "Authorization": "Bearer {{authToken}}",
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "closingCash": 25000,
+        "notes": "All good, balanced correctly"
+      },
+      "tests": [
+        "Status code is 200",
+        "Shift status is closed",
+        "cashDifference calculated"
+      ]
+    }
+  ]
+}

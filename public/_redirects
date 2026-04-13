@@ -1,0 +1,11 @@
+# SPA redirect for client-side routing
+/*    /index.html   200
+
+# API redirects (if you have a backend)
+/api/*  https://your-backend-api.com/api/:splat  200
+
+# Prevent access to sensitive files
+/.env*  /404.html  404
+/package*.json  /404.html  404
+/tsconfig.json  /404.html  404
+/vite.config.*  /404.html  404

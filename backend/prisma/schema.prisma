@@ -1,0 +1,626 @@
+// Banduka POS - Production Database Schema
+// Part 1: Configuration and Core Models
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Organizations (Multi-tenant foundation)
+model Organization {
+  id                     String    @id @default(uuid())
+  name                   String
+  businessType           String
+  taxPin                 String    @unique
+  physicalAddress        String?
+  phone                  String?
+  email                  String?
+  etimsEnvironment       String    @default("production")
+  etimsBhfId             String?
+  etimsDeviceSerial      String?
+  etimsTin               String?
+  subscriptionTier       String    @default("starter")
+  subscriptionStatus     String    @default("active")
+  subscriptionExpiresAt  DateTime?
+  maxBranches            Int       @default(1)
+  maxUsers               Int       @default(5)
+  features               Json      @default("{}")
+  status                 String    @default("active")
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  deletedAt              DateTime?
+  
+  branches               Branch[]
+  users                  User[]
+  categories             Category[]
+  products               Product[]
+  customers              Customer[]
+  sales                  Sale[]
+
+  @@index([taxPin])
+  @@index([status])
+  @@map("organizations")
+}
+
+// Branches
+model Branch {
+  id                 String    @id @default(uuid())
+  organizationId     String
+  name               String
+  code               String    @unique
+  county             String?
+  town               String?
+  physicalAddress    String?
+  etimsBhfId         String?
+  etimsDeviceSerial  String?
+  timezone           String    @default("Africa/Nairobi")
+  currency           String    @default("KES")
+  isPrimary          Boolean   @default(false)
+  status             String    @default("active")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
+  
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users              User[]
+  branchInventory    BranchInventory[]
+  sales              Sale[]
+  shifts             Shift[]
+
+  @@index([organizationId])
+  @@map("branches")
+}
+
+// Users
+model User {
+  id                    String    @id @default(uuid())
+  organizationId        String
+  branchId              String?
+  username              String    @unique
+  email                 String?   @unique
+  phone                 String?
+  passwordHash          String
+  pinHash               String?
+  fullName              String
+  role                  String
+  employeeCode          String?
+  mfaEnabled            Boolean   @default(false)
+  mfaSecret             String?
+  lastLoginAt           DateTime?
+  lastLoginIp           String?
+  failedLoginAttempts   Int       @default(0)
+  lockedUntil           DateTime?
+  passwordChangedAt     DateTime  @default(now())
+  forcePasswordChange   Boolean   @default(false)
+  permissions           Json      @default("{}")
+  status                String    @default("active")
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  deletedAt             DateTime?
+  
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch                Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  sales                 Sale[]
+  shifts                Shift[]
+  sessions              UserSession[]
+
+  @@index([organizationId])
+  @@index([username])
+  @@map("users")
+}
+
+model UserSession {
+  id               String   @id @default(uuid())
+  userId           String
+  refreshTokenHash String
+  ipAddress        String?
+  deviceInfo       Json     @default("{}")
+  expiresAt        DateTime
+  lastActivityAt   DateTime @default(now())
+  isValid          Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isValid])
+  @@index([expiresAt])
+  @@map("user_sessions")
+}
+
+// Categories
+model Category {
+  id              String    @id @default(uuid())
+  organizationId  String
+  parentId        String?
+  name            String
+  code            String?
+  description     String?
+  imageUrl        String?
+  defaultTaxRate  Decimal   @default(16.00)
+  taxType         String    @default("VAT")
+  sortOrder       Int       @default(0)
+  status          String    @default("active")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+  
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent          Category?    @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children        Category[]   @relation("CategoryHierarchy")
+  products        Product[]
+
+  @@index([organizationId])
+  @@map("categories")
+}
+
+// Products
+model Product {
+  id                String    @id @default(uuid())
+  organizationId    String
+  categoryId        String?
+  name              String
+  description       String?
+  sku               String?   @unique
+  barcode           String?   @unique
+  costPrice         Decimal   @default(0)
+  sellingPrice      Decimal
+  wholesalePrice    Decimal?
+  minimumPrice      Decimal?
+  taxRate           Decimal   @default(16.00)
+  taxInclusive      Boolean   @default(true)
+  taxType           String    @default("VAT")
+  etimsItemClsCd    String?
+  etimsItemTyCd     String?
+  etimsPkgUnitCd    String?
+  trackInventory    Boolean   @default(true)
+  unitOfMeasure     String    @default("piece")
+  reorderLevel      Decimal   @default(0)
+  reorderQuantity   Decimal   @default(0)
+  isService         Boolean   @default(false)
+  isVariant         Boolean   @default(false)
+  parentProductId   String?
+  variantAttributes Json?
+  images            Json      @default("[]")
+  version           Int       @default(1)
+  status            String    @default("active")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+  
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category          Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  parentProduct     Product?     @relation("ProductVariants", fields: [parentProductId], references: [id], onDelete: Cascade)
+  variants          Product[]    @relation("ProductVariants")
+  branchInventory   BranchInventory[]
+  saleItems         SaleItem[]
+
+  @@index([organizationId])
+  @@index([sku])
+  @@index([barcode])
+  @@map("products")
+}
+
+// Branch Inventory
+model BranchInventory {
+  id                 String    @id @default(uuid())
+  productId          String
+  branchId           String
+  quantity           Decimal   @default(0)
+  reservedQuantity   Decimal   @default(0)
+  averageCost        Decimal   @default(0)
+  version            Int       @default(1)
+  lastCountedAt      DateTime?
+  lastRestockedAt    DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  
+  product            Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  branch             Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, branchId])
+  @@index([productId])
+  @@index([branchId])
+  @@map("branch_inventory")
+}
+
+// Customers
+model Customer {
+  id                    String    @id @default(uuid())
+  organizationId        String
+  customerCode          String?   @unique
+  name                  String
+  phone                 String?
+  email                 String?
+  taxPin                String?
+  physicalAddress       String?
+  county                String?
+  town                  String?
+  isBusiness            Boolean   @default(false)
+  businessName          String?
+  customFields          Json      @default("{}")
+  creditLimit           Decimal   @default(0)
+  currentCreditBalance  Decimal   @default(0)
+  loyaltyPoints         Int       @default(0)
+  tags                  String[]  @default([])
+  status                String    @default("active")
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  deletedAt             DateTime?
+  
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sales                 Sale[]
+
+  @@index([organizationId])
+  @@index([customerCode])
+  @@map("customers")
+}
+
+// Shifts
+model Shift {
+  id                String    @id @default(uuid())
+  organizationId    String
+  branchId          String
+  userId            String
+  shiftNumber       String
+  openingCash       Decimal   @default(0)
+  closingCash       Decimal?
+  expectedCash      Decimal?
+  cashDifference    Decimal?
+  startedAt         DateTime
+  endedAt           DateTime?
+  totalSales        Decimal   @default(0)
+  totalTransactions Int       @default(0)
+  notes             String?
+  status            String    @default("open")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  branch            Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sales             Sale[]
+
+  @@index([branchId])
+  @@index([userId])
+  @@map("shifts")
+}
+
+// Sales
+model Sale {
+  id                        String    @id @default(uuid())
+  organizationId            String
+  branchId                  String
+  saleNumber                String    @unique
+  receiptNumber             String?
+  customerId                String?
+  userId                    String
+  shiftId                   String?
+  subtotal                  Decimal
+  discountAmount            Decimal   @default(0)
+  discountPercentage        Decimal   @default(0)
+  taxAmount                 Decimal   @default(0)
+  totalAmount               Decimal
+  amountPaid                Decimal   @default(0)
+  changeAmount              Decimal   @default(0)
+  paymentStatus             String    @default("paid")
+  etimsStatus               String    @default("pending")
+  etimsInternalData         String?
+  etimsReceiptSignature     String?
+  etimsQrCode               String?
+  etimsSubmissionAttempts   Int       @default(0)
+  etimsSubmittedAt          DateTime?
+  etimsConfirmedAt          DateTime?
+  etimsError                String?
+  notes                     String?
+  saleType                  String    @default("retail")
+  saleDate                  DateTime
+  createdOffline            Boolean   @default(false)
+  syncStatus                String    @default("synced")
+  clientCreatedAt           DateTime?
+  idempotencyKey            String?   @unique
+  status                    String    @default("completed")
+  voidedAt                  DateTime?
+  voidReason                String?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+  
+  organization              Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch                    Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  customer                  Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  user                      User         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  shift                     Shift?       @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  saleItems                 SaleItem[]
+  payments                  Payment[]
+
+  @@index([organizationId])
+  @@index([branchId])
+  @@index([saleNumber])
+  @@index([etimsStatus])
+  @@map("sales")
+}
+
+// Sale Items
+model SaleItem {
+  id                 String    @id @default(uuid())
+  saleId             String
+  productId          String?
+  productName        String
+  productSku         String?
+  quantity           Decimal
+  unitPrice          Decimal
+  discountAmount     Decimal   @default(0)
+  discountPercentage Decimal   @default(0)
+  taxRate            Decimal
+  taxAmount          Decimal   @default(0)
+  subtotal           Decimal
+  totalAmount        Decimal
+  costPrice          Decimal?
+  etimsItemSeq       Int?
+  createdAt          DateTime  @default(now())
+  
+  sale               Sale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product            Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([saleId])
+  @@index([productId])
+  @@map("sale_items")
+}
+
+// Payments
+model Payment {
+  id                    String    @id @default(uuid())
+  saleId                String?
+  paymentMethod         String
+  amount                Decimal
+  transactionReference  String?
+  gatewayResponse       Json?
+  phoneNumber           String?
+  status                String    @default("completed")
+  paymentDate           DateTime
+  createdAt             DateTime  @default(now())
+  
+  sale                  Sale?     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId])
+  @@index([paymentMethod])
+  @@map("payments")
+}
+
+// Expenses
+model Expense {
+  id             String   @id @default(uuid())
+  organizationId String
+  branchId       String?
+  userId         String?
+  category       String
+  description    String
+  amount         Decimal
+  paymentMethod  String   @default("cash")
+  reference      String?
+  date           DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@map("expenses")
+}
+
+// Quotations
+model Quotation {
+  id             String   @id @default(uuid())
+  organizationId String
+  customerId     String?
+  quoteNumber    String   @unique
+  status         String   @default("draft")
+  subtotal       Decimal  @default(0)
+  taxAmount      Decimal  @default(0)
+  discountAmount Decimal  @default(0)
+  totalAmount    Decimal  @default(0)
+  validUntil     DateTime?
+  notes          String?
+  items          Json     @default("[]")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@map("quotations")
+}
+
+// Purchase Orders
+model PurchaseOrder {
+  id             String   @id @default(uuid())
+  organizationId String
+  branchId       String?
+  supplierId     String?
+  supplierName   String?
+  poNumber       String   @unique
+  status         String   @default("draft")
+  subtotal       Decimal  @default(0)
+  taxAmount      Decimal  @default(0)
+  totalAmount    Decimal  @default(0)
+  expectedDate   DateTime?
+  receivedDate   DateTime?
+  notes          String?
+  items          Json     @default("[]")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  invoices       SupplierInvoice[]
+
+  @@index([organizationId])
+  @@map("purchase_orders")
+}
+
+// Supplier Invoices
+model SupplierInvoice {
+  id              String        @id @default(uuid())
+  organizationId  String
+  purchaseOrderId String?
+  supplierName    String
+  invoiceNumber   String?
+  status          String        @default("unpaid")
+  subtotal        Decimal       @default(0)
+  taxAmount       Decimal       @default(0)
+  totalAmount     Decimal       @default(0)
+  amountPaid      Decimal       @default(0)
+  invoiceDate     DateTime
+  dueDate         DateTime?
+  notes           String?
+  items           Json          @default("[]")
+  payments        Json          @default("[]")
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@map("supplier_invoices")
+}
+
+// Layaways
+model Layaway {
+  id             String   @id @default(uuid())
+  organizationId String
+  customerId     String?
+  customerName   String
+  layawayNumber  String   @unique
+  status         String   @default("active")
+  totalAmount    Decimal
+  depositAmount  Decimal  @default(0)
+  balanceDue     Decimal
+  dueDate        DateTime?
+  items          Json     @default("[]")
+  payments       Json     @default("[]")
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@map("layaways")
+}
+
+// Work Orders
+model WorkOrder {
+  id             String   @id @default(uuid())
+  organizationId String
+  customerId     String?
+  customerName   String
+  woNumber       String   @unique
+  status         String   @default("pending")
+  description    String
+  totalAmount    Decimal  @default(0)
+  amountPaid     Decimal  @default(0)
+  dueDate        DateTime?
+  completedDate  DateTime?
+  items          Json     @default("[]")
+  payments       Json     @default("[]")
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@map("work_orders")
+}
+
+// Sales Orders
+model SalesOrder {
+  id             String   @id @default(uuid())
+  organizationId String
+  customerId     String?
+  customerName   String?
+  soNumber       String   @unique
+  status         String   @default("pending")
+  subtotal       Decimal  @default(0)
+  taxAmount      Decimal  @default(0)
+  totalAmount    Decimal  @default(0)
+  deliveryDate   DateTime?
+  notes          String?
+  items          Json     @default("[]")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@map("sales_orders")
+}
+
+// Held Receipts
+model HeldReceipt {
+  id             String   @id @default(uuid())
+  organizationId String
+  label          String?
+  customerId     String?
+  items          Json     @default("[]")
+  heldAt         DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@map("held_receipts")
+}
+
+// Settings
+model OrgSettings {
+  id             String   @id @default(uuid())
+  organizationId String   @unique
+  data           Json     @default("{}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("org_settings")
+}
+
+// Audit Logs
+model AuditLog {
+  id             String   @id @default(uuid())
+  organizationId String
+  userId         String?
+  action         String
+  entity         String
+  entityId       String?
+  changes        Json?
+  ipAddress      String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([entity, entityId])
+  @@map("audit_logs")
+}
+
+// Gap 2 — F4: M-Pesa conflict tracking
+model MpesaConflict {
+  id             String   @id @default(uuid())
+  organizationId String
+  mpesaRef       String
+  saleId1        String
+  saleId2        String?
+  status         String   @default("CONFLICT_PENDING") // CONFLICT_PENDING | CONFLICT_ESCALATED | RESOLVED
+  resolvedBy     String?
+  resolvedAt     DateTime?
+  resolution     String?  // DUPLICATE_VOIDED | MANUAL
+  autoResolvedAt DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([mpesaRef])
+  @@map("mpesa_conflicts")
+}
+
+// Gap 3 — A1: Capability snapshot for offline auth
+model CapabilitySnapshot {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  role        String
+  permissions Json     @default("[]")
+  validUntil  DateTime
+  revoked     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@map("capability_snapshots")
+}

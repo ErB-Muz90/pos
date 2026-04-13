@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug UI Test</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .test { background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .error { background: #ffebee; color: #c62828; }
+        .success { background: #e8f5e8; color: #2e7d32; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Banduka POS Debug Test</h1>
+    
+    <div class="test">
+        <h3>1. Basic HTML/CSS Test</h3>
+        <p>✅ If you see this styled text, HTML and CSS are working!</p>
+    </div>
+
+    <div class="test">
+        <h3>2. JavaScript Test</h3>
+        <p id="js-test">❌ JavaScript not loaded</p>
+    </div>
+
+    <div class="test">
+        <h3>3. Vite Server Test</h3>
+        <p id="vite-test">Testing...</p>
+    </div>
+
+    <div class="test">
+        <h3>4. React Import Test</h3>
+        <p id="react-test">Testing...</p>
+    </div>
+
+    <div class="test">
+        <h3>5. API Key Test</h3>
+        <p id="api-test">Testing...</p>
+    </div>
+
+    <div class="test">
+        <h3>6. Console Errors</h3>
+        <div id="console-errors"></div>
+    </div>
+
+    <script>
+        // Test 2: Basic JavaScript
+        document.getElementById('js-test').innerHTML = '✅ JavaScript is working!';
+        document.getElementById('js-test').className = 'success';
+
+        // Test 3: Vite server connection
+        fetch('/index.tsx')
+            .then(response => {
+                if (response.ok) {
+                    document.getElementById('vite-test').innerHTML = '✅ Vite server responding';
+                    document.getElementById('vite-test').className = 'success';
+                } else {
+                    throw new Error('Vite server error: ' + response.status);
+                }
+            })
+            .catch(error => {
+                document.getElementById('vite-test').innerHTML = '❌ ' + error.message;
+                document.getElementById('vite-test').className = 'error';
+            });
+
+        // Test 4: React import
+        import('https://esm.sh/react@^19.1.0')
+            .then(() => {
+                document.getElementById('react-test').innerHTML = '✅ React imports working';
+                document.getElementById('react-test').className = 'success';
+            })
+            .catch(error => {
+                document.getElementById('react-test').innerHTML = '❌ React import failed: ' + error.message;
+                document.getElementById('react-test').className = 'error';
+            });
+
+        // Test 5: API Key
+        const apiKey = window.process?.env?.API_KEY || 'Not found';
+        document.getElementById('api-test').innerHTML = apiKey === 'Not found' ? 
+            '⚠️ API Key not found' : '✅ API Key loaded: ' + apiKey.substring(0, 10) + '...';
+
+        // Test 6: Console error capture
+        const originalError = console.error;
+        const errors = [];
+        console.error = function(...args) {
+            errors.push(args.join(' '));
+            originalError.apply(console, args);
+            document.getElementById('console-errors').innerHTML = 
+                errors.length > 0 ? 
+                '❌ Errors: <br>' + errors.map(e => '• ' + e).join('<br>') :
+                '✅ No console errors';
+        };
+
+        // Initial check
+        setTimeout(() => {
+            if (errors.length === 0) {
+                document.getElementById('console-errors').innerHTML = '✅ No console errors detected';
+                document.getElementById('console-errors').className = 'success';
+            }
+        }, 2000);
+    </script>
+</body>
+</html>
