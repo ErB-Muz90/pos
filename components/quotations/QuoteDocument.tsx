@@ -108,15 +108,23 @@ const QuoteDocument = React.forwardRef<HTMLDivElement, QuoteDocumentProps>(({ qu
                             <span className="font-mono text-slate-800">{quotation.tax.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between text-lg font-bold border-t pt-2 mt-2">
-                            <span className="text-slate-800">Total Amount</span>
+                            <span className="text-slate-800">{documentType === 'Proforma-Invoice' ? 'Amount Due' : 'Total Amount'}</span>
                             <span className="font-mono text-slate-800">Ksh {quotation.total.toFixed(2)}</span>
                         </div>
                     </div>
                 </section>
+
+                {/* Notes / Terms */}
+                {quotation.notes && (
+                    <section className="mt-8 p-4 bg-slate-50 border rounded-md">
+                        <h4 className="text-xs font-bold uppercase text-slate-500 mb-1">Notes / Terms &amp; Conditions</h4>
+                        <p className="text-sm text-slate-700 whitespace-pre-wrap">{quotation.notes}</p>
+                    </section>
+                )}
                 
                 {/* Footer */}
                 <footer className="mt-16 pt-4 border-t text-xs text-slate-500">
-                    {settings.paymentMethods.enabled && settings.paymentMethods.displayOnDocuments.includes(documentType) && (
+                    {(documentType === 'Proforma-Invoice' || (settings.paymentMethods.enabled && settings.paymentMethods.displayOnDocuments.includes(documentType))) && (
                         <div className="mb-4 text-left">
                             <h4 className="font-bold text-slate-700 uppercase mb-2">How to Pay</h4>
                             <div className="grid grid-cols-2 gap-4">

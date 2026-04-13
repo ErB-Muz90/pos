@@ -111,7 +111,7 @@ const QuotationDetailView: React.FC<QuotationDetailViewProps> = ({ quotation, se
                             >
                                 <DownloadIcon/> {isDownloading && downloadType === 'Proforma-Invoice' ? 'Downloading...' : 'Pro-forma PDF'}
                             </motion.button>
-                            {!linkedSale && quotation.status !== 'Expired' && (
+                            {!linkedSale && quotation.status === 'Approved' && (
                                 <motion.button 
                                     onClick={() => onConvertQuoteToSale(quotation)} 
                                     whileTap={{ scale: 0.95 }}
