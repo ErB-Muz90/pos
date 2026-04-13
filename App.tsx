@@ -215,6 +215,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
     const [salesOrderForPO, setSalesOrderForPO] = useState<SalesOrder | null>(null);
     const [originatingSalesOrderId, setOriginatingSalesOrderId] = useState<string | null>(null);
     const [originatingQuotationId, setOriginatingQuotationId] = useState<string | null>(null);
+    const [quotationLockedMaterials, setQuotationLockedMaterials] = useState<any[]>([]);
     const [saleSuccessInfo, setSaleSuccessInfo] = useState<{ sale: Sale; layaway?: Layaway } | null>(null);
     const [supplierPaymentSuccessInfo, setSupplierPaymentSuccessInfo] = useState<{ payment: SupplierPayment; invoice: SupplierInvoice; po: PurchaseOrder; supplier: Supplier; } | null>(null);
     const [isDriveReady, setIsDriveReady] = useState(false);
@@ -400,6 +401,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                         { id: 'acc_sales_returns', code: '4510', name: 'Sales Returns & Allowances', type: 'Contra Revenue', isEditable: false },
                         { id: 'acc_cogs', code: '5010', name: 'Cost of Goods Sold', type: 'Expenses', isEditable: false },
                         { id: 'acc_expense', code: '5020', name: 'Operating Expenses', type: 'Expenses', isEditable: false },
+                        { id: 'acc_wip', code: '1250', name: 'Work-in-Progress', type: 'Assets', isEditable: false },
                     ];
                     for (const acc of DEFAULT_ACCOUNTS) {
                         await db.saveItem('chartOfAccounts', acc);
@@ -412,6 +414,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                         { id: 'acc_card', code: '1030', name: 'Card/Bank Payments', type: 'Assets', isEditable: false },
                         { id: 'acc_bank', code: '1040', name: 'Bank Account', type: 'Assets', isEditable: false },
                         { id: 'acc_inventory', code: '1200', name: 'Inventory Asset', type: 'Assets', isEditable: false },
+                        { id: 'acc_wip', code: '1250', name: 'Work-in-Progress', type: 'Assets', isEditable: false },
                         { id: 'acc_vat_receivable', code: '1300', name: 'VAT Receivable', type: 'Assets', isEditable: false },
                         { id: 'acc_ap', code: '2010', name: 'Accounts Payable', type: 'Liabilities', isEditable: false },
                         { id: 'acc_cust_deposits', code: '2200', name: 'Customer Deposits', type: 'Liabilities', isEditable: false },
@@ -478,6 +481,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                         defaultCustomerDepositsId: 'acc_cust_deposits',
                         defaultShiftClearingId: 'acc_shift_clearing',
                         defaultExpenseAccountId: 'acc_expense',
+                        defaultWipAccountId: 'acc_wip',
                     };
                     currentSettings = { ...currentSettings, accounting: updatedAccountingSettings as any };
                     await db.saveItem('settings', currentSettings);
@@ -904,6 +908,14 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
         try {
             const originalWO = workOrders.find(wo => wo.id === updatedWO.id);
 
+            // Fix 4 — block close if balance due > 0
+            if (originalWO && updatedWO.status === 'Closed' && originalWO.status !== 'Closed') {
+                if ((updatedWO.balanceDue || 0) > 0) {
+                    showToast(`Cannot close: outstanding balance of KES ${updatedWO.balanceDue.toFixed(2)}. Collect payment first.`, 'error');
+                    return;
+                }
+            }
+
             // Handle stock un-reservation on cancellation
             if (originalWO && updatedWO.status === 'Cancelled' && originalWO.status !== 'Cancelled') {
                 const updatedProducts = [...products];
@@ -922,14 +934,27 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                     }
                 }
                 if (productWasUpdated) setProducts(updatedProducts);
+
+                // Fix 7 — reverse deposit if any was collected: Dr Customer Deposits, Cr Cash
+                const depositPaid = originalWO.amountPaid || 0;
+                if (depositPaid > 0) {
+                    const { accounting: acc } = settings;
+                    if (acc.defaultCustomerDepositsId && acc.defaultCashAccountId) {
+                        await createAccountingTransaction(
+                            `Refund: Cancelled WO ${originalWO.id}`,
+                            originalWO.id, 'Return' as any,
+                            [
+                                { accountId: acc.defaultCustomerDepositsId, debit: depositPaid, credit: 0 },
+                                { accountId: acc.defaultCashAccountId, debit: 0, credit: depositPaid },
+                            ]
+                        );
+                    }
+                    await logAudit('WO Cancelled — Deposit Reversed', `Refund entry of KES ${depositPaid} posted for WO ${originalWO.id}.`);
+                }
             }
 
-            // On Close: deduct inventory, post COGS, mark quotation Converted
-            if (originalWO && updatedWO.status === 'Closed' && originalWO.status !== 'Closed') {
-                if (updatedWO.hasVariance && !updatedWO.varianceResolved) {
-                    showToast('Cannot close: unresolved variances require manager approval.', 'error');
-                    return;
-                }
+            // Fix 5 — deduct inventory at consumption (InProgress), not at invoice
+            if (originalWO && updatedWO.status === 'InProgress' && originalWO.status !== 'InProgress') {
                 const woMaterials = workOrderMaterials.filter(m => m.workOrderId === updatedWO.id);
                 const updatedProducts = [...products];
                 for (const mat of woMaterials) {
@@ -946,15 +971,44 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                 }
                 setProducts(updatedProducts);
 
-                // Post COGS journal entries
+                // Fix 6 — post WIP entries: Dr WIP, Cr Inventory (job costing accumulation)
+                const wipEntries = woMaterials.filter(m => (m.costPrice || 0) > 0).map(m => ({
+                    accountId: settings.accounting.defaultWipAccountId || 'acc_wip',
+                    debit: (m.costPrice || 0) * (m.qtyActual ?? m.qty),
+                    credit: 0,
+                }));
+                const invCredits = woMaterials.filter(m => (m.costPrice || 0) > 0).map(m => ({
+                    accountId: settings.accounting.defaultInventoryAccountId,
+                    debit: 0,
+                    credit: (m.costPrice || 0) * (m.qtyActual ?? m.qty),
+                }));
+                if (wipEntries.length > 0) {
+                    await createAccountingTransaction(
+                        `WIP: Materials consumed for WO ${updatedWO.id}`,
+                        updatedWO.id, 'Sale' as any,
+                        [...wipEntries, ...invCredits]
+                    );
+                }
+                await logAudit('WO Materials Consumed', `Inventory deducted for WO ${updatedWO.id} on InProgress.`);
+            }
+
+            // On Close: post COGS, mark quotation Converted (inventory already deducted at InProgress)
+            if (originalWO && updatedWO.status === 'Closed' && originalWO.status !== 'Closed') {
+                if (updatedWO.hasVariance && !updatedWO.varianceResolved) {
+                    showToast('Cannot close: unresolved variances require manager approval.', 'error');
+                    return;
+                }
+                const woMaterials = workOrderMaterials.filter(m => m.workOrderId === updatedWO.id);
+
+                // Fix 6 — COGS recognition at invoice: Dr COGS, Cr WIP (not Inventory — already moved to WIP at InProgress)
                 const cogsEntries = woMaterials
                     .filter(m => m.costPrice && m.costPrice > 0)
                     .map(m => ({ accountId: settings.accounting.defaultCogsAccountId, debit: (m.costPrice || 0) * (m.qtyActual ?? m.qty), credit: 0 }));
-                const inventoryCredits = woMaterials
+                const wipCredits = woMaterials
                     .filter(m => m.costPrice && m.costPrice > 0)
-                    .map(m => ({ accountId: settings.accounting.defaultInventoryAccountId, debit: 0, credit: (m.costPrice || 0) * (m.qtyActual ?? m.qty) }));
+                    .map(m => ({ accountId: settings.accounting.defaultWipAccountId || 'acc_wip', debit: 0, credit: (m.costPrice || 0) * (m.qtyActual ?? m.qty) }));
                 if (cogsEntries.length > 0) {
-                    await createAccountingTransaction(`WO COGS: ${updatedWO.id}`, updatedWO.id, 'Sale', [...cogsEntries, ...inventoryCredits]);
+                    await createAccountingTransaction(`WO COGS: ${updatedWO.id}`, updatedWO.id, 'Sale', [...cogsEntries, ...wipCredits]);
                 }
 
                 // Mark linked quotation as Converted
@@ -1187,12 +1241,13 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                                     ]
                                 );
                             } else {
+                                // Partial payment — still a deposit, not yet revenue
                                 await createAccountingTransaction(
                                     `Partial Payment for Work Order ${wo.id}`,
-                                    newSale.id, 'Sale',
+                                    newSale.id, 'WorkOrderDeposit' as any,
                                     [
                                         ...paymentEntries,
-                                        { accountId: accSettings.defaultSalesAccountId, debit: 0, credit: amountPaidNow }
+                                        { accountId: accSettings.defaultCustomerDepositsId, debit: 0, credit: amountPaidNow }
                                     ]
                                 );
                             }
@@ -2516,8 +2571,16 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
     };
 
     const handleApproveQuotation = async (quotation: Quotation) => {
+        // Expiry check
+        if (quotation.expiryDate && new Date(quotation.expiryDate) < new Date()) {
+            showToast(`Quotation ${quotation.quoteNumber} has expired and cannot be approved.`, 'error');
+            return;
+        }
         const updated = { ...quotation, status: 'Approved' as const };
         await handleUpdateQuotation(updated);
+        if (canUseServerSync()) {
+            try { await fetchApi(`/quotations/${quotation.id}/approve`, { method: 'POST' }); } catch { /* non-fatal — local state already updated */ }
+        }
         showToast(`Quotation ${quotation.quoteNumber} approved.`, 'success');
     };
 
@@ -2536,6 +2599,23 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
             showToast('An active shift is required to create a Work Order.', 'error');
             return;
         }
+        // Fix 3 — price lock: map quotation items to WO materials with locked unit prices
+        const lockedMaterials = quotation.items
+            .map(item => {
+                const product = products.find(p => p.id === item.productId);
+                if (!product) return null;
+                return {
+                    materialId: item.productId,
+                    name: item.productName,
+                    qty: item.quantity,
+                    unitPrice: item.price, // locked from quote — cannot be changed
+                    costPrice: product.costPrice || 0,
+                    lineTotal: item.price * item.quantity,
+                    priceLocked: true,
+                };
+            })
+            .filter(Boolean);
+        setQuotationLockedMaterials(lockedMaterials);
         setOriginatingQuotationId(quotation.id);
         setSelectedCustomerId(quotation.customerId);
         handleViewChange(View.WorkOrder);
@@ -3085,9 +3165,10 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                     <NewLayawayView products={products} customers={customers} settings={settings} onAddLayaway={handleAddLayaway} onBack={() => { handleViewChange(View.POS); setLayawayCart(undefined); }} activeShift={activeShift} initialCartItems={layawayCart} />
                 );
             case View.WorkOrder: // Form
-                return <NewWorkOrderView products={products} customers={customers} users={users} settings={settings} onAddWorkOrder={handleAddWorkOrder} onBack={() => handleViewChange(View.WorkOrderList)} activeShift={activeShift}
+                return <NewWorkOrderView products={products} customers={customers} users={users} settings={settings} onAddWorkOrder={handleAddWorkOrder} onBack={() => { setQuotationLockedMaterials([]); handleViewChange(View.WorkOrderList); }} activeShift={activeShift}
                     quotationId={originatingQuotationId || undefined}
                     initialCustomerId={selectedCustomerId || undefined}
+                    initialMaterials={quotationLockedMaterials}
                 />;
             case View.SalesOrder: // Form
                 return <NewSalesOrderView products={products} customers={customers} settings={settings} onAddSalesOrder={handleAddSalesOrder} onBack={() => handleViewChange(View.SalesOrderList)} activeShift={activeShift} />;

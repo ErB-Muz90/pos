@@ -1,5 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+
+// Fix 4 — valid state transitions
+const TRANSITIONS: Record<string, string[]> = {
+  Pending:         ['InProgress', 'Cancelled'],
+  InProgress:      ['AwaitingParts', 'Ready', 'Cancelled'],
+  AwaitingParts:   ['InProgress', 'Cancelled'],
+  Ready:           ['Closed', 'Cancelled'],
+  Completed:       ['Closed'],
+  Closed:          [],
+  Cancelled:       [],
+  Warranty:        ['InProgress', 'Closed'],
+};
 
 @Injectable()
 export class WorkOrdersService {
@@ -21,6 +33,31 @@ export class WorkOrdersService {
   }
 
   async update(id: string, dto: any) {
+    const wo = await this.prisma.workOrder.findUnique({ where: { id } });
+    if (!wo) throw new BadRequestException('Work order not found');
+
+    const newStatus: string | undefined = dto.status;
+
+    if (newStatus && newStatus !== wo.status) {
+      // Fix 4 — transition guard
+      const allowed = TRANSITIONS[wo.status] ?? [];
+      if (!allowed.includes(newStatus)) {
+        throw new BadRequestException(
+          `Invalid transition: ${wo.status} → ${newStatus}. Allowed: ${allowed.join(', ') || 'none'}`,
+        );
+      }
+
+      // Fix 4 — block close if balance due > 0
+      if (newStatus === 'Closed') {
+        const balanceDue = Number(dto.balanceDue ?? wo.balanceDue ?? 0);
+        if (balanceDue > 0) {
+          throw new BadRequestException(
+            `Cannot close work order with outstanding balance of KES ${balanceDue.toFixed(2)}`,
+          );
+        }
+      }
+    }
+
     return this.prisma.workOrder.update({ where: { id }, data: dto });
   }
 }

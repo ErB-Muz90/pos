@@ -16,16 +16,17 @@ interface NewWorkOrderViewProps {
     activeShift: Shift | null;
     quotationId?: string;
     initialCustomerId?: string;
+    initialMaterials?: any[]; // Fix 3 — pre-populated from approved quotation with locked prices
 }
 
-const NewWorkOrderView: React.FC<NewWorkOrderViewProps> = ({ products, customers, users, settings, onAddWorkOrder, onBack, activeShift, quotationId, initialCustomerId }) => {
+const NewWorkOrderView: React.FC<NewWorkOrderViewProps> = ({ products, customers, users, settings, onAddWorkOrder, onBack, activeShift, quotationId, initialCustomerId, initialMaterials }) => {
     const [customerId, setCustomerId] = useState(initialCustomerId || '');
     const [jobTitle, setJobTitle] = useState('');
     const [description, setDescription] = useState('');
     const [promisedDate, setPromisedDate] = useState(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
     const [assignedTo, setAssignedTo] = useState('');
     const [labourAmount, setLabourAmount] = useState<number | ''>('');
-    const [materials, setMaterials] = useState<(Omit<WorkOrderMaterial, 'id'|'workOrderId'>)[]>([]);
+    const [materials, setMaterials] = useState<(Omit<WorkOrderMaterial, 'id'|'workOrderId'>)[]>(initialMaterials || []);
     const [vatMode, setVatMode] = useState<'inclusive' | 'exclusive'>('exclusive');
     const [depositRequired, setDepositRequired] = useState<number | ''>('');
     const [depositToPay, setDepositToPay] = useState<number | ''>('');
@@ -203,12 +204,19 @@ const NewWorkOrderView: React.FC<NewWorkOrderViewProps> = ({ products, customers
                                                 min="0"
                                                 step="0.1"
                                             />
-                                            <span className="text-xs text-foreground-muted">x {m.unitPrice.toFixed(2)}</span>
+                                            <span className="text-xs text-foreground-muted">
+                                                x {m.unitPrice.toFixed(2)}
+                                                {(m as any).priceLocked && (
+                                                    <span className="ml-1 text-amber-600 font-semibold" title="Price locked from approved quotation">🔒</span>
+                                                )}
+                                            </span>
                                         </div>
                                         <span className="w-24 text-right font-mono font-semibold">Ksh {(m.qty * m.unitPrice).toFixed(2)}</span>
+                                        {!(m as any).priceLocked && (
                                         <button type="button" onClick={() => handleRemoveMaterial(m.materialId)} className="text-danger/70 p-1 rounded-full hover:bg-danger/10 hover:text-danger">
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                         </button>
+                                        )}
                                     </div>
                                 ))}
                             </div>
