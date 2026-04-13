@@ -45,14 +45,17 @@ const ZReportView: React.FC<ZReportViewProps> = ({ shift, sales: allSales, expen
     const [isDownloading, setIsDownloading] = useState(false);
     
     // Calculations
-    const shiftSales = allSales.filter(s => shift.salesIds.includes(s.id));
-    
+    const shiftSales = allSales.filter(s => shift.salesIds.includes(s.id) && s.type !== 'Return');
+    const shiftReturns = allSales.filter(s => shift.salesIds.includes(s.id) && s.type === 'Return');
+
     const itemsSold = shiftSales.reduce((acc, sale) => acc + sale.items.reduce((iAcc, i) => iAcc + i.quantity, 0), 0);
     const grossSales = shiftSales.reduce((acc, s) => acc + s.subtotal, 0);
     const totalDiscounts = shiftSales.reduce((acc, s) => acc + s.discountAmount, 0);
+    const totalReturns = shiftReturns.reduce((acc, s) => acc + Math.abs(s.total), 0);
     const totalVat = shiftSales.reduce((acc, s) => acc + s.tax, 0);
-    const netSales = shift.totalSales || 0;
-    
+    // Bug 2 fix: compute netSales locally, don't trust shift.totalSales (may be 0 for offline shifts)
+    const netSales = shiftSales.reduce((acc, s) => acc + s.total, 0) - totalReturns;
+
     const cashSales = shift.paymentBreakdown?.Cash || 0;
     const mpesaSales = shift.paymentBreakdown?.['M-Pesa'] || 0;
     const cashChange = shiftSales.reduce((acc, sale) => acc + sale.change, 0);
@@ -68,14 +71,28 @@ const ZReportView: React.FC<ZReportViewProps> = ({ shift, sales: allSales, expen
     const mpesaBanked = bankDeposits.filter(d => d.shiftId === shift.id).reduce((acc, d) => acc + d.breakdown.mpesa, 0);
     const expectedMpesa = mpesaSales - totalMpesaExpenses - totalMpesaSupplierPayments - mpesaBanked;
 
+    // Bug 5 fix: exclude Points from cash payment totals
+    const totalPayments = (shift.paymentBreakdown?.Cash || 0)
+        + (shift.paymentBreakdown?.['M-Pesa'] || 0)
+        + (shift.paymentBreakdown?.Card || 0);
 
-    const totalPayments = Object.values(shift.paymentBreakdown || {}).reduce<number>((sum, amount) => sum + (Number(amount) || 0), 0);
-
+    // Bug 1 fix: include minutes in duration
     const durationMs = shift.endTime ? new Date(shift.endTime).getTime() - new Date(shift.startTime).getTime() : 0;
     const durationHours = Math.floor(durationMs / 3600000);
-    const durationString = `${durationHours} hours`;
+    const durationMins = Math.floor((durationMs % 3600000) / 60000);
+    const durationString = `${durationHours}h ${durationMins}m`;
 
-    const variance = shift.cashVariance || 0;
+    // Bug 6 fix: recompute expected cash locally rather than trusting stored value
+    const expectedCashInDrawer = (shift.startingFloat || 0)
+        + cashSales
+        - cashChange
+        - totalCashExpenses
+        - totalCashSupplierPayments
+        - cashBanked;
+
+    const variance = (shift.actualCashInDrawer != null)
+        ? Number(((shift.actualCashInDrawer) - expectedCashInDrawer).toFixed(2))
+        : 0;
 
     const handlePrint = () => window.print();
     
@@ -115,7 +132,7 @@ const ZReportView: React.FC<ZReportViewProps> = ({ shift, sales: allSales, expen
                     <div className="text-center">
                         <h2 className="text-xl font-bold uppercase">{settings.businessInfo.name}</h2>
                         <p className="text-lg font-bold">Z-REPORT</p>
-                        <p className="text-[10px]">Shift Closure Report</p>
+                        <p className="text-[10px]">Shift Closure Report{isHistoricalView ? ' (Historical)' : ''}</p>
                         <p className="text-[10px]">{shift.endTime ? new Date(shift.endTime).toLocaleString('en-GB', { timeZone: 'Africa/Nairobi' }) : 'N/A'}</p>
                     </div>
 
@@ -131,10 +148,11 @@ const ZReportView: React.FC<ZReportViewProps> = ({ shift, sales: allSales, expen
                     <DottedSeparator />
                     
                     <SectionTitle title="SALES SUMMARY" />
-                    <ReportRow label="Total Transactions" value={shift.salesIds.length} />
+                    <ReportRow label="Total Transactions" value={shiftSales.length} />
                     <ReportRow label="Items Sold" value={itemsSold} />
                     <ReportRow label="Gross Sales" value={formatCurrency(grossSales)} />
                     <ReportRow label="Total Discounts" value={formatCurrency(-totalDiscounts)} />
+                    {totalReturns > 0 && <ReportRow label="Returns" value={formatCurrency(-totalReturns)} />}
                     <ReportRow label={`VAT (${settings.tax.vatRate}%)`} value={formatCurrency(totalVat)} />
                     <div className="border-t border-black my-1 font-bold">
                         <ReportRow label="NET SALES" value={formatCurrency(netSales)} isBold />
@@ -146,8 +164,10 @@ const ZReportView: React.FC<ZReportViewProps> = ({ shift, sales: allSales, expen
                     <ReportRow label="Cash Sales" value={formatCurrency(shift.paymentBreakdown?.Cash || 0)} />
                     <ReportRow label="M-Pesa Sales" value={formatCurrency(shift.paymentBreakdown?.['M-Pesa'] || 0)} />
                     <ReportRow label="Card Sales" value={formatCurrency(shift.paymentBreakdown?.Card || 0)} />
-                    <ReportRow label="Loyalty Points" value={formatCurrency(shift.paymentBreakdown?.Points || 0)} />
-                    <ReportRow label="Total Payments" value={formatCurrency(totalPayments)} isBold />
+                    {(shift.paymentBreakdown?.Points || 0) > 0 && (
+                        <ReportRow label="Loyalty Points (non-cash)" value={formatCurrency(shift.paymentBreakdown?.Points || 0)} />
+                    )}
+                    <ReportRow label="Total Cash Payments" value={formatCurrency(totalPayments)} isBold />
 
                     <DottedSeparator />
                     
@@ -171,11 +191,13 @@ const ZReportView: React.FC<ZReportViewProps> = ({ shift, sales: allSales, expen
                     {totalCashSupplierPayments > 0 && <ReportRow label="Supplier Payments" value={'-' + formatCurrency(totalCashSupplierPayments)} />}
                     {cashBanked > 0 && <ReportRow label="Cash Banked" value={'-' + formatCurrency(cashBanked)} />}
                     <DottedSeparator />
-                    <ReportRow label="Expected Cash" value={formatCurrency(shift.expectedCashInDrawer || 0)} isBold />
+                    <ReportRow label="Expected Cash" value={formatCurrency(expectedCashInDrawer)} isBold />
                     <ReportRow label="Actual Cash Count" value={formatCurrency(shift.actualCashInDrawer || 0)} isBold />
-                    <div className={`flex justify-between items-center font-bold text-base my-1 ${variance === 0 ? 'text-green-600' : ''}`}>
+                    <div className={`flex justify-between items-center font-bold text-base my-1 ${
+                        variance === 0 ? 'text-green-600' : variance > 0 ? 'text-amber-600' : 'text-red-600'
+                    }`}>
                         <span>Variance:</span>
-                        <span>{ (variance >= 0 ? '+' : '') + formatCurrency(variance) }</span>
+                        <span>{(variance >= 0 ? '+' : '') + formatCurrency(variance)}</span>
                     </div>
 
                     <DottedSeparator />
@@ -190,8 +212,14 @@ const ZReportView: React.FC<ZReportViewProps> = ({ shift, sales: allSales, expen
 
                     <DottedSeparator />
 
-                    <div className={`my-3 p-2 text-center border font-bold ${variance === 0 ? 'border-green-600 text-green-600' : 'border-red-600 text-red-600'}`}>
-                        {variance === 0 ? "✓ PERFECT BALANCE - NO VARIANCE" : variance > 0 ? `OVERAGE OF ${formatCurrency(variance)}` : `SHORTAGE OF ${formatCurrency(Math.abs(variance))}`}
+                    <div className={`my-3 p-2 text-center border font-bold ${
+                        variance === 0 ? 'border-green-600 text-green-600'
+                        : variance > 0 ? 'border-amber-600 text-amber-600'
+                        : 'border-red-600 text-red-600'
+                    }`}>
+                        {variance === 0 ? "✓ PERFECT BALANCE - NO VARIANCE"
+                            : variance > 0 ? `OVERAGE OF ${formatCurrency(variance)}`
+                            : `SHORTAGE OF ${formatCurrency(Math.abs(variance))}`}
                     </div>
 
                     {cashBanked > 0 && (
