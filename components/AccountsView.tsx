@@ -20,6 +20,7 @@ interface AccountsViewProps {
     customers: Customer[];
     supplierInvoices: SupplierInvoice[];
     onProcessExpense: (amount: number, reason: string, category: string, source: Expense['source'], payee?: string, receiptImageUrl?: string) => void;
+    onCreateAccountingTransaction: (description: string, referenceId: string, referenceType: AccountingTransaction['referenceType'], entries: any[]) => void;
 }
 
 // Icon components
@@ -57,7 +58,7 @@ type DisplayTransaction = {
     isCredit: boolean;
 };
 
-const AccountsView: React.FC<AccountsViewProps> = ({ sales, expenses, accountingTransactions, chartOfAccounts, settings, activeShift, supplierPayments, suppliers, bankDeposits, bankWithdrawals, onAddBankDeposit, onAddBankWithdrawal, currentUser, customers, supplierInvoices, onProcessExpense }) => {
+const AccountsView: React.FC<AccountsViewProps> = ({ sales, expenses, accountingTransactions, chartOfAccounts, settings, activeShift, supplierPayments, suppliers, bankDeposits, bankWithdrawals, onAddBankDeposit, onAddBankWithdrawal, currentUser, customers, supplierInvoices, onProcessExpense, onCreateAccountingTransaction }) => {
     const [activeTab, setActiveTab] = useState('all');
     const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
     const [isRecordTxModalOpen, setIsRecordTxModalOpen] = useState(false);
@@ -136,8 +137,16 @@ const AccountsView: React.FC<AccountsViewProps> = ({ sales, expenses, accounting
     const handleSaveTransaction = (data: any) => {
         if (data.type === 'Expense') {
             onProcessExpense(data.amount, data.description, data.category, data.paymentMethod, data.payee, data.receiptImageUrl);
-            setIsRecordTxModalOpen(false);
+        } else if (data.entries?.length) {
+            // All other types: post the pre-built journal entries directly
+            onCreateAccountingTransaction(
+                `${data.type}: ${data.description}`,
+                `manual_${Date.now()}`,
+                'ManualEntry' as any,
+                data.entries,
+            );
         }
+        setIsRecordTxModalOpen(false);
     };
 
     const handleWithdrawSubmit = (e: React.FormEvent) => {

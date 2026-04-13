@@ -636,6 +636,7 @@ export interface Settings {
         defaultAccountsPayableId: string;
         defaultCustomerDepositsId: string;
         defaultShiftClearingId: string;
+        defaultExpenseAccountId: string;
         reportingBasis: 'cash' | 'accrual';
     };
 }

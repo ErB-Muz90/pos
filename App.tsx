@@ -399,6 +399,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                         { id: 'acc_sales', code: '4010', name: 'Sales Revenue', type: 'Revenue', isEditable: false },
                         { id: 'acc_sales_returns', code: '4510', name: 'Sales Returns & Allowances', type: 'Contra Revenue', isEditable: false },
                         { id: 'acc_cogs', code: '5010', name: 'Cost of Goods Sold', type: 'Expenses', isEditable: false },
+                        { id: 'acc_expense', code: '5020', name: 'Operating Expenses', type: 'Expenses', isEditable: false },
                     ];
                     for (const acc of DEFAULT_ACCOUNTS) {
                         await db.saveItem('chartOfAccounts', acc);
@@ -419,6 +420,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                         { id: 'acc_sales', code: '4010', name: 'Sales Revenue', type: 'Revenue', isEditable: false },
                         { id: 'acc_sales_returns', code: '4510', name: 'Sales Returns & Allowances', type: 'Contra Revenue', isEditable: false },
                         { id: 'acc_cogs', code: '5010', name: 'Cost of Goods Sold', type: 'Expenses', isEditable: false },
+                        { id: 'acc_expense', code: '5020', name: 'Operating Expenses', type: 'Expenses', isEditable: false },
                     ];
                     for (const acc of DEFAULT_ACCOUNTS) {
                         await db.saveItem('chartOfAccounts', acc);
@@ -475,6 +477,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                         defaultAccountsPayableId: 'acc_ap',
                         defaultCustomerDepositsId: 'acc_cust_deposits',
                         defaultShiftClearingId: 'acc_shift_clearing',
+                        defaultExpenseAccountId: 'acc_expense',
                     };
                     currentSettings = { ...currentSettings, accounting: updatedAccountingSettings as any };
                     await db.saveItem('settings', currentSettings);
@@ -775,6 +778,23 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
             setActiveTimeClockEvent(newTimeClockEvent);
 
             await logAudit('Shift Started', `User ${currentUser.name} started a new shift with a float of KES ${startingFloat}.`);
+
+            // Bug 4 fix: post float as accounting entry (Debit Cash, Credit Shift Float Clearing)
+            if (startingFloat > 0) {
+                const { defaultCashAccountId, defaultShiftClearingId } = settings.accounting;
+                if (defaultCashAccountId && defaultShiftClearingId) {
+                    await createAccountingTransaction(
+                        `Opening Float: Shift ${newShift.id.slice(-8)}`,
+                        newShift.id,
+                        'ShiftFloat' as any,
+                        [
+                            { accountId: defaultCashAccountId, debit: startingFloat, credit: 0 },
+                            { accountId: defaultShiftClearingId, debit: 0, credit: startingFloat },
+                        ]
+                    );
+                }
+            }
+
             showToast(`Shift started for ${currentUser.name}.`, 'success');
         } catch (error) {
             console.error("Failed to start shift:", error);
@@ -1201,6 +1221,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
 
                 if (!newSale.workOrderId) { // Only do this for regular sales or SO completions
                     const entries: JournalEntry[] = [];
+                    let totalDebited = 0;
                     newSale.payments.forEach(p => {
                         let accountId = '';
                         switch (p.method) {
@@ -1213,16 +1234,22 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                             const debitAmount = p.method === 'Cash' ? p.amount - newSale.change : p.amount;
                             if (debitAmount > 0) {
                                 entries.push({ accountId, debit: debitAmount, credit: 0 });
+                                totalDebited += debitAmount;
                             }
                         }
                     });
                     if (newSale.pointsValue > 0) {
+                        // Points redeemed: debit Sales (reduces revenue), already counted in total
                         entries.push({ accountId: accSettings.defaultSalesAccountId, debit: newSale.pointsValue, credit: 0 });
+                        totalDebited += newSale.pointsValue;
                     }
-                    entries.push({ accountId: accSettings.defaultSalesAccountId, debit: 0, credit: newSale.taxableAmount });
-                    if (newSale.tax > 0) {
-                        entries.push({ accountId: accSettings.defaultVatPayableAccountId, debit: 0, credit: newSale.tax });
-                    }
+                    // Bug 2 fix: credit side derived from totalDebited to guarantee balance.
+                    // Split into revenue (ex-VAT) and VAT payable proportionally.
+                    const vatRate = newSale.taxableAmount > 0 ? newSale.tax / (newSale.taxableAmount + newSale.tax) : 0;
+                    const vatCredit = Math.round(totalDebited * vatRate * 100) / 100;
+                    const revenueCredit = totalDebited - vatCredit;
+                    if (revenueCredit > 0) entries.push({ accountId: accSettings.defaultSalesAccountId, debit: 0, credit: revenueCredit });
+                    if (vatCredit > 0) entries.push({ accountId: accSettings.defaultVatPayableAccountId, debit: 0, credit: vatCredit });
                     if (cogs > 0) {
                         entries.push({ accountId: accSettings.defaultCogsAccountId, debit: cogs, credit: 0 });
                         entries.push({ accountId: accSettings.defaultInventoryAccountId, debit: 0, credit: cogs });
@@ -1272,7 +1299,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
             pushToServer('POST', '/expenses', newExpense);
             
             // Create accounting transaction
-            const expenseAccountId = settings.accounting.defaultCogsAccountId; // Simplified assumption
+            const expenseAccountId = settings.accounting.defaultExpenseAccountId || settings.accounting.defaultCogsAccountId;
             let sourceAccountId = '';
             switch (source) {
                 case 'Cash Drawer': sourceAccountId = settings.accounting.defaultCashAccountId; break;
@@ -1363,10 +1390,20 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                 : refundMethod === 'M-Pesa' ? acc.defaultMpesaAccountId : acc.defaultCardAccountId;
             const cogsReversal = returnedItems.reduce((sum, item) =>
                 item.productType === 'Inventory' ? sum + (item.costPrice || 0) * item.quantity : sum, 0);
-            const entries = [
-                { accountId: acc.defaultSalesReturnAccountId, debit: refundTotal, credit: 0 },
-                { accountId: refundAccountId, debit: 0, credit: refundTotal },
+
+            // Compute VAT portion of refund using original sale's effective VAT rate
+            const origVatRate = originalSale.taxableAmount > 0
+                ? originalSale.tax / (originalSale.taxableAmount + originalSale.tax) : 0;
+            const vatReversal = Math.round(refundTotal * origVatRate * 100) / 100;
+            const revenueReversal = refundTotal - vatReversal;
+
+            const entries: any[] = [
+                { accountId: acc.defaultSalesReturnAccountId, debit: revenueReversal, credit: 0 },
             ];
+            if (vatReversal > 0) {
+                entries.push({ accountId: acc.defaultVatPayableAccountId, debit: vatReversal, credit: 0 });
+            }
+            entries.push({ accountId: refundAccountId, debit: 0, credit: refundTotal });
             if (cogsReversal > 0) {
                 entries.push({ accountId: acc.defaultInventoryAccountId, debit: cogsReversal, credit: 0 });
                 entries.push({ accountId: acc.defaultCogsAccountId, debit: 0, credit: cogsReversal });
@@ -3132,6 +3169,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                     suppliers={suppliers}
                     supplierInvoices={supplierInvoices}
                     onProcessExpense={handleProcessExpense}
+                    onCreateAccountingTransaction={createAccountingTransaction}
                 />;
             case View.GeneralLedger:
                 return <GeneralLedgerView transactions={accountingTransactions} accounts={chartOfAccounts} />;
