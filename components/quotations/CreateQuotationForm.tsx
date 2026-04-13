@@ -17,6 +17,9 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({ customers, pr
     const [items, setItems] = useState<QuotationItem[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+    const [notes, setNotes] = useState('');
+    const defaultExpiry = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
+    const [expiryDate, setExpiryDate] = useState(defaultExpiry);
 
     const searchResults = useMemo(() => {
         if (!searchTerm) return [];
@@ -78,11 +81,12 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({ customers, pr
             alert('Please select a customer and add at least one item.');
             return;
         }
-        
         const quoteData: QuotationData = {
             customerId: selectedCustomerId,
             items,
             status,
+            notes: notes.trim() || undefined,
+            expiryDate: expiryDate ? new Date(expiryDate) : undefined,
         };
         onSave(quoteData, status);
     };
@@ -214,6 +218,29 @@ const CreateQuotationForm: React.FC<CreateQuotationFormProps> = ({ customers, pr
                         )}
                         <div className="flex justify-between text-sm"><span className="text-foreground-muted dark:text-dark-foreground-muted">VAT ({settings.tax.vatRate}%)</span><span className="font-semibold font-mono">Ksh {tax.toFixed(2)}</span></div>
                         <div className="flex justify-between text-xl font-bold border-t border-border dark:border-dark-border pt-3 mt-3"><span className="text-foreground dark:text-dark-foreground">Total</span><span className="text-primary dark:text-dark-primary font-mono">Ksh {total.toFixed(2)}</span></div>
+
+                        <div className="border-t border-border dark:border-dark-border pt-3 space-y-3">
+                            <div>
+                                <label className="block text-sm font-medium text-foreground-muted dark:text-dark-foreground-muted">Valid Until</label>
+                                <input
+                                    type="date"
+                                    value={expiryDate}
+                                    min={new Date().toISOString().split('T')[0]}
+                                    onChange={e => setExpiryDate(e.target.value)}
+                                    className="mt-1 w-full p-2 bg-background dark:bg-dark-background border border-border dark:border-dark-border rounded-md text-sm"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-foreground-muted dark:text-dark-foreground-muted">Notes / Terms</label>
+                                <textarea
+                                    value={notes}
+                                    onChange={e => setNotes(e.target.value)}
+                                    rows={3}
+                                    placeholder="Payment terms, special conditions..."
+                                    className="mt-1 w-full p-2 bg-background dark:bg-dark-background border border-border dark:border-dark-border rounded-md text-sm resize-none"
+                                />
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

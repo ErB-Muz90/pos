@@ -2531,11 +2531,12 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                 items: quotationData.items,
                 status,
                 createdDate: new Date(),
-                expiryDate: new Date(new Date().setDate(new Date().getDate() + 30)), // Expires in 30 days
+                expiryDate: quotationData.expiryDate || new Date(new Date().setDate(new Date().getDate() + 30)),
                 subtotal,
                 discountAmount: totalDiscountAmount,
                 tax,
                 total,
+                notes: quotationData.notes,
             };
     
             await db.saveItem('quotations', newQuotation);
@@ -2819,7 +2820,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
         const item: CartItem = {
             id: `WO_BALANCE_${workOrder.id}`,
             inventoryCode: `WO-${workOrder.id}`,
-            name: `Balance for Work Order #${workOrder.id}`,
+            name: `${workOrder.jobTitle} — Balance (WO #${workOrder.id.slice(-6)})`,
             price: workOrder.balanceDue,
             pricingType: 'inclusive',
             stock: 9999,
@@ -3204,6 +3205,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                         onBack={() => setWorkOrderToView(null)}
                         onUpdate={handleUpdateWorkOrder}
                         onPushToPOS={handlePushWOToPOS}
+                        quotationNumber={workOrderToView.quotationId ? quotations.find(q => q.id === workOrderToView.quotationId)?.quoteNumber : undefined}
                     />
                 ) : (
                     <WorkOrderListView workOrders={workOrders} users={users} customers={customers} onViewWorkOrder={setWorkOrderToView} onCreateRequest={() => handleViewChange(View.WorkOrder)} />

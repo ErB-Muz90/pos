@@ -8,9 +8,10 @@ interface JobCardDocumentProps {
     materials: WorkOrderMaterial[];
     users: User[];
     settings: Settings;
+    quotationNumber?: string;
 }
 
-const JobCardDocument = React.forwardRef<HTMLDivElement, JobCardDocumentProps>(({ workOrder, materials, users, settings }, ref) => {
+const JobCardDocument = React.forwardRef<HTMLDivElement, JobCardDocumentProps>(({ workOrder, materials, users, settings, quotationNumber }, ref) => {
     const assignedTechnician = users.find(u => u.id === workOrder.assignedTo);
 
     return (
@@ -29,6 +30,7 @@ const JobCardDocument = React.forwardRef<HTMLDivElement, JobCardDocumentProps>((
                     <h1 className="text-3xl font-bold uppercase text-slate-700 tracking-wide">Job Card</h1>
                     <div className="mt-2 text-xs">
                         <p className="flex justify-end gap-2"><span className="text-slate-500">Job Card #:</span> <span className="font-semibold">{workOrder.id}</span></p>
+                        {quotationNumber && <p className="flex justify-end gap-2"><span className="text-slate-500">Quote Ref:</span> <span className="font-semibold">{quotationNumber}</span></p>}
                         <p className="flex justify-end gap-2"><span className="text-slate-500">Date:</span> <span className="font-semibold">{new Date(workOrder.createdAt).toLocaleDateString('en-GB', {timeZone: 'Africa/Nairobi'})}</span></p>
                     </div>
                 </div>

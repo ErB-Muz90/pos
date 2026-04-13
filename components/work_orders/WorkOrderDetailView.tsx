@@ -4,6 +4,7 @@ import React, { useState, useRef } from 'react';
 import { WorkOrder, User, Settings, Sale, WorkOrderMaterial } from '../../types';
 import { motion } from 'framer-motion';
 import JobCardDocument from './JobCardDocument';
+import WOInvoiceDocument from './WOInvoiceDocument';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -16,6 +17,7 @@ interface WorkOrderDetailViewProps {
     onBack: () => void;
     onUpdate: (workOrder: WorkOrder) => void;
     onPushToPOS: (workOrder: WorkOrder) => void;
+    quotationNumber?: string;
 }
 
 const TabButton: React.FC<{ label: string; isActive: boolean; onClick: () => void; }> = ({ label, isActive, onClick }) => (
@@ -54,11 +56,12 @@ const waitForImagesToLoad = (element: HTMLElement): Promise<void[]> => {
 };
 
 
-export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({ workOrder, materials, users, sales, settings, onBack, onUpdate, onPushToPOS }) => {
+export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({ workOrder, materials, users, sales, settings, onBack, onUpdate, onPushToPOS, quotationNumber }) => {
     const [status, setStatus] = useState(workOrder.status);
     const [assignedTo, setAssignedTo] = useState(workOrder.assignedTo || '');
-    const [activeTab, setActiveTab] = useState<'details' | 'job_card'>('details');
+    const [activeTab, setActiveTab] = useState<'details' | 'job_card' | 'invoice'>('details');
     const pdfRef = useRef<HTMLDivElement>(null);
+    const invoiceRef = useRef<HTMLDivElement>(null);
     const [isDownloading, setIsDownloading] = useState(false);
 
     const isFullyPaid = workOrder.balanceDue <= 0;
@@ -106,11 +109,7 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({ workOr
             setIsDownloading(true);
             try {
                 await waitForImagesToLoad(pdfRef.current!);
-                const canvas = await html2canvas(pdfRef.current, {
-                    scale: 2,
-                    useCORS: true,
-                    backgroundColor: '#ffffff'
-                });
+                const canvas = await html2canvas(pdfRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
                 const imgData = canvas.toDataURL('image/png');
                 const pdf = new jsPDF('p', 'mm', 'a4');
                 const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -120,6 +119,28 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({ workOr
             } catch (error) {
                 console.error("Failed to generate PDF:", error);
                 alert("Sorry, there was an error generating the PDF. The logo might be causing an issue.");
+            } finally {
+                setIsDownloading(false);
+            }
+        }, 100);
+    };
+
+    const handleDownloadInvoice = async () => {
+        setActiveTab('invoice');
+        setTimeout(async () => {
+            if (!invoiceRef.current || isDownloading) return;
+            setIsDownloading(true);
+            try {
+                await waitForImagesToLoad(invoiceRef.current!);
+                const canvas = await html2canvas(invoiceRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                pdf.save(`Invoice_${workOrder.id}.pdf`);
+            } catch (error) {
+                console.error("Failed to generate invoice PDF:", error);
             } finally {
                 setIsDownloading(false);
             }
@@ -152,13 +173,17 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({ workOr
                     <div className="flex space-x-1 border-b border-border dark:border-dark-border">
                         <TabButton label="Details & Status" isActive={activeTab === 'details'} onClick={() => setActiveTab('details')} />
                         <TabButton label="Job Card" isActive={activeTab === 'job_card'} onClick={() => setActiveTab('job_card')} />
+                        <TabButton label="Invoice" isActive={activeTab === 'invoice'} onClick={() => setActiveTab('invoice')} />
                     </div>
                      <div className="flex items-center gap-2">
                         <motion.button onClick={handlePrint} whileTap={{scale: 0.95}} className="bg-card dark:bg-dark-card text-foreground dark:text-dark-foreground font-semibold px-4 py-2 rounded-lg border border-border dark:border-dark-border">
                             Print
                         </motion.button>
                         <motion.button onClick={handleDownloadPDF} disabled={isDownloading} whileTap={{scale: 0.95}} className="bg-primary text-primary-content font-semibold px-4 py-2 rounded-lg disabled:bg-slate-400">
-                            {isDownloading ? 'Downloading...' : 'Download PDF'}
+                            {isDownloading ? 'Downloading...' : 'Job Card PDF'}
+                        </motion.button>
+                        <motion.button onClick={handleDownloadInvoice} disabled={isDownloading} whileTap={{scale: 0.95}} className="bg-emerald-600 text-white font-semibold px-4 py-2 rounded-lg disabled:bg-slate-400">
+                            Invoice PDF
                         </motion.button>
                         {!isFullyPaid && (
                             <motion.button 
@@ -189,7 +214,7 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({ workOr
                                     <div>
                                         <label className="block text-sm font-medium">Status</label>
                                         <select value={status} onChange={e => handleStatusChange(e.target.value as any)} className="w-full mt-1 p-2 border border-border dark:border-dark-border rounded-md bg-card dark:bg-dark-card">
-                                            {(['Pending', 'InProgress', 'Completed', 'Closed', 'Cancelled', 'Warranty'] as const).map(s => <option key={s} value={s}>{s}</option>)}
+                                            {(['Pending', 'InProgress', 'AwaitingParts', 'Ready', 'Completed', 'Closed', 'Cancelled', 'Warranty'] as const).map(s => <option key={s} value={s}>{s === 'InProgress' ? 'In Progress' : s === 'AwaitingParts' ? 'Awaiting Parts' : s}</option>)}
                                         </select>
                                     </div>
                                     <div>
@@ -283,9 +308,13 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({ workOr
                                 </div>
                             )}
                         </div>
+                    ) : activeTab === 'job_card' ? (
+                        <div className="print-area">
+                             <JobCardDocument ref={pdfRef} workOrder={workOrder} materials={materials} users={users} settings={settings} quotationNumber={quotationNumber} />
+                        </div>
                     ) : (
                         <div className="print-area">
-                             <JobCardDocument ref={pdfRef} workOrder={workOrder} materials={materials} users={users} settings={settings} />
+                            <WOInvoiceDocument ref={invoiceRef} workOrder={workOrder} materials={materials} settings={settings} linkedSales={linkedSales} quotationNumber={quotationNumber} />
                         </div>
                     )}
                 </motion.div>

@@ -251,6 +251,8 @@ export interface QuotationData {
   customerId: string;
   items: QuotationItem[];
   status: 'Draft' | 'Sent';
+  notes?: string;
+  expiryDate?: Date;
 }
 
 export interface LayawayPayment {
@@ -287,7 +289,7 @@ export interface WorkOrder {
   customerName: string;
   jobTitle: string;
   description?: string;
-  status: "Pending" | "InProgress" | "Completed" | "Closed" | "Cancelled" | "Warranty";
+  status: "Pending" | "InProgress" | "AwaitingParts" | "Ready" | "Completed" | "Closed" | "Cancelled" | "Warranty";
   priority?: "normal" | "urgent" | "scheduled";
   jobType?: "repair" | "service" | "installation" | "maintenance" | "warranty_claim" | "supply";
   promisedDate?: string;
