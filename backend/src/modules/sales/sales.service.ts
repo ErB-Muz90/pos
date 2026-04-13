@@ -7,12 +7,16 @@ import {
 import { PrismaService } from '../../database/prisma.service';
 import { CreateSaleDto, VoidSaleDto } from './dto/create-sale.dto';
 import { Prisma } from '@prisma/client';
+import { LedgerService } from '../ledger/ledger.service';
 
 @Injectable()
 export class SalesService {
   private readonly logger = new Logger(SalesService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private ledger: LedgerService,
+  ) {}
 
   /**
    * Check if sale with this idempotency key already exists
@@ -428,10 +432,42 @@ export class SalesService {
           const loyaltyPoints = Math.floor(totalAmount / 100);
           await tx.customer.update({
             where: { id: dto.customerId },
-            data: {
-              loyaltyPoints: { increment: loyaltyPoints },
-            },
+            data: { loyaltyPoints: { increment: loyaltyPoints } },
           });
+        }
+
+        // Step 5 — Atomic ledger writes (Law F2: append-only)
+        // SALE entry: cash in
+        await this.ledger.createEntry({
+          organizationId,
+          branchId: dto.branchId,
+          shiftId: dto.shiftId,
+          saleId: createdSale.id,
+          type: 'SALE',
+          amount: totalAmount,
+          description: `Sale ${saleNumber}`,
+          createdBy: userId,
+          deviceCreatedAt: (dto as any).clientCreatedAt
+            ? new Date((dto as any).clientCreatedAt)
+            : undefined,
+        }, tx);
+
+        // COGS entry: cost of goods sold (cash out)
+        const totalCogs = saleItems.reduce(
+          (sum, si) => sum + Number(si.costPrice ?? 0) * Number(si.quantity),
+          0,
+        );
+        if (totalCogs > 0) {
+          await this.ledger.createEntry({
+            organizationId,
+            branchId: dto.branchId,
+            shiftId: dto.shiftId,
+            saleId: createdSale.id,
+            type: 'COGS',
+            amount: -totalCogs,
+            description: `COGS for sale ${saleNumber}`,
+            createdBy: userId,
+          }, tx);
         }
 
         return createdSale;

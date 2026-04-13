@@ -17,6 +17,7 @@ import { CustomersModule } from './modules/customers/customers.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { ContractsModule } from './modules/contracts/contracts.module';
 import { TransactionalModule } from './modules/transactional/transactional.module';
+import { LedgerModule } from './modules/ledger/ledger.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TimeoutInterceptor } from './common/interceptors/timeout.interceptor';
@@ -65,6 +66,9 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 
     // Transactional data modules (expenses, quotations, POs, invoices, layaways, etc.)
     TransactionalModule,
+
+    // Step 3 — Append-only transaction ledger
+    LedgerModule,
 
     // Feature modules will be added here as we build them
   ],

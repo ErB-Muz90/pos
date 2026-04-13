@@ -590,6 +590,28 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+// Step 3 — Append-only transaction ledger (Law F2)
+model TransactionLedger {
+  id             String   @id @default(uuid())
+  organizationId String
+  branchId       String?
+  shiftId        String?
+  saleId         String?
+  referenceId    String?  // layaway id, expense id, etc.
+  type           String   // SALE | SALE_RETURN | LAYAWAY_DEPOSIT | LAYAWAY_INSTALLMENT | EXPENSE | COGS | FLOAT | AP_PAYMENT
+  amount         Decimal  // positive = credit to cash, negative = debit
+  currency       String   @default("KES")
+  description    String?
+  createdBy      String?
+  deviceCreatedAt DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([shiftId])
+  @@index([saleId])
+  @@map("transaction_ledger")
+}
+
 // Gap 2 — F4: M-Pesa conflict tracking
 model MpesaConflict {
   id             String   @id @default(uuid())

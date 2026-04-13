@@ -1,22 +1,25 @@
-import { IsNumber, IsString, IsOptional, Min } from 'class-validator';
+import { IsNumber, IsString, IsOptional, Min, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
+export class ManagerOverrideDto {
+  @IsString() managerId: string;
+  @IsString() reason: string;
+}
+
 export class CloseShiftDto {
-  @ApiProperty({
-    description: 'Actual cash count at shift close',
-    example: 25000,
-    minimum: 0,
-  })
+  @ApiProperty({ example: 25000, minimum: 0 })
   @IsNumber()
   @Min(0)
   closingCash: number;
 
-  @ApiProperty({
-    description: 'Notes about the shift',
-    example: 'Everything balanced correctly',
-    required: false,
-  })
   @IsString()
   @IsOptional()
   notes?: string;
+
+  /** Required when variance > KES 5 */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ManagerOverrideDto)
+  managerOverride?: ManagerOverrideDto;
 }

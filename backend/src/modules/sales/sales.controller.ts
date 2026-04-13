@@ -189,6 +189,7 @@ export class SalesController {
       closeShiftDto.notes || '',
       userId,
       userRole,
+      closeShiftDto.managerOverride,
     );
   }
 
