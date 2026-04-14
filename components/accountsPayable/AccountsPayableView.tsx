@@ -1,11 +1,15 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { SupplierInvoice, Supplier, SupplierPayment, Shift, Sale, Expense, Settings } from '../../types';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import { SupplierInvoice, Supplier, SupplierPayment, Shift, Sale, Expense, Settings, PurchaseOrder } from '../../types';
 import PaymentModal from './PaymentModal';
+import SupplierInvoiceDocument from './SupplierInvoiceDocument';
 
 interface AccountsPayableViewProps {
     invoices: SupplierInvoice[];
     suppliers: Supplier[];
+    purchaseOrders: PurchaseOrder[];
     onRecordPayment: (invoiceId: string, payment: Omit<SupplierPayment, 'id' | 'invoiceId' | 'processedById' | 'processedByName' | 'shiftId'>) => void;
     onViewInvoice: (invoice: SupplierInvoice) => void;
     activeShift: Shift | null;
@@ -39,10 +43,33 @@ const StatusBadge = ({ status }: { status: SupplierInvoice['status'] }) => {
     }
 };
 
-const AccountsPayableView = ({ invoices, suppliers, onRecordPayment, onViewInvoice, activeShift, sales, payouts, settings, availableFunds }: AccountsPayableViewProps) => {
+const AccountsPayableView = ({ invoices, suppliers, purchaseOrders, onRecordPayment, onViewInvoice, activeShift, sales, payouts, settings, availableFunds }: AccountsPayableViewProps) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedInvoice, setSelectedInvoice] = useState<SupplierInvoice | null>(null);
     const [activeTab, setActiveTab] = useState<'outstanding' | 'paid'>('outstanding');
+    const [search, setSearch] = useState('');
+    const [dateFrom, setDateFrom] = useState('');
+    const [dateTo, setDateTo] = useState('');
+    const [downloadingId, setDownloadingId] = useState<string | null>(null);
+    const hiddenPdfRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+    const downloadPDF = useCallback(async (invoice: SupplierInvoice, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setDownloadingId(invoice.id);
+        try {
+            const el = hiddenPdfRefs.current[invoice.id];
+            if (!el) return;
+            const canvas = await html2canvas(el, { scale: 2, useCORS: true });
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const w = pdf.internal.pageSize.getWidth();
+            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, w, (canvas.height * w) / canvas.width);
+            pdf.save(`Invoice_${invoice.invoiceNumber}.pdf`);
+        } catch (err) {
+            console.error('PDF generation failed', err);
+        } finally {
+            setDownloadingId(null);
+        }
+    }, []);
 
     const supplierMap = useMemo(() => {
         return suppliers.reduce((acc, supplier) => {
@@ -94,6 +121,23 @@ const AccountsPayableView = ({ invoices, suppliers, onRecordPayment, onViewInvoi
             .sort((a, b) => new Date(b.invoiceDate).getTime() - new Date(a.invoiceDate).getTime());
     }, [invoices]);
 
+    const applyFilters = (list: SupplierInvoice[]) => {
+        return list.filter(inv => {
+            if (search) {
+                const s = search.toLowerCase();
+                const supplierName = (supplierMap[inv.supplierId] || '').toLowerCase();
+                if (!inv.invoiceNumber.toLowerCase().includes(s) && !supplierName.includes(s)) return false;
+            }
+            const refDate = new Date(inv.invoiceDate);
+            if (dateFrom && refDate < new Date(dateFrom)) return false;
+            if (dateTo && refDate > new Date(dateTo + 'T23:59:59')) return false;
+            return true;
+        });
+    };
+
+    const filteredUnpaid = useMemo(() => applyFilters(unpaidInvoices), [unpaidInvoices, search, dateFrom, dateTo]);
+    const filteredPaid = useMemo(() => applyFilters(paidInvoices), [paidInvoices, search, dateFrom, dateTo]);
+
     const handleRecordPaymentClick = (invoice: SupplierInvoice) => {
         setSelectedInvoice(invoice);
         setIsModalOpen(true);
@@ -131,6 +175,21 @@ const AccountsPayableView = ({ invoices, suppliers, onRecordPayment, onViewInvoi
             </div>
 
             <div className="bg-card dark:bg-dark-card rounded-xl shadow-clay-dark overflow-x-auto">
+                {/* Search & filter bar */}
+                <div className="p-4 border-b border-border dark:border-dark-border flex flex-wrap gap-3 items-center">
+                    <div className="relative flex-1 min-w-[180px]">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        <input type="text" placeholder="Search invoice # or supplier..." value={search} onChange={e => setSearch(e.target.value)} className="w-full pl-9 pr-3 py-2 text-sm border border-border dark:border-dark-border rounded-lg bg-background dark:bg-dark-background focus:outline-none focus:ring-2 focus:ring-primary" />
+                    </div>
+                    <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} title="From date" className="text-sm border border-border dark:border-dark-border rounded-lg px-3 py-2 bg-background dark:bg-dark-background focus:outline-none focus:ring-2 focus:ring-primary" />
+                    <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} title="To date" className="text-sm border border-border dark:border-dark-border rounded-lg px-3 py-2 bg-background dark:bg-dark-background focus:outline-none focus:ring-2 focus:ring-primary" />
+                    {(search || dateFrom || dateTo) && (
+                        <button onClick={() => { setSearch(''); setDateFrom(''); setDateTo(''); }} className="text-xs text-foreground-muted hover:text-danger px-2 py-1 rounded border border-border dark:border-dark-border">Clear</button>
+                    )}
+                    <span className="text-xs text-foreground-muted ml-auto">
+                        {activeTab === 'outstanding' ? filteredUnpaid.length : filteredPaid.length} record{(activeTab === 'outstanding' ? filteredUnpaid.length : filteredPaid.length) !== 1 ? 's' : ''}
+                    </span>
+                </div>
                 <table className="w-full text-sm text-left text-foreground-muted dark:text-dark-foreground-muted">
                     <thead className="text-xs text-foreground-muted dark:text-dark-foreground-muted uppercase">
                         <tr>
@@ -140,14 +199,14 @@ const AccountsPayableView = ({ invoices, suppliers, onRecordPayment, onViewInvoi
                             <th className="px-6 py-3 font-semibold">Total</th>
                             <th className="px-6 py-3 font-semibold">{activeTab === 'paid' ? 'Paid' : 'Amount Due'}</th>
                             <th className="px-6 py-3 font-semibold">Status</th>
-                            <th className="px-6 py-3"><span className="sr-only">Actions</span></th>
+                            <th className="px-6 py-3 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {activeTab === 'outstanding' ? (
-                            unpaidInvoices.length === 0 ? (
-                                <tr><td colSpan={7} className="text-center py-10 text-foreground-muted"><p className="font-semibold">All caught up!</p><p>There are no outstanding supplier invoices.</p></td></tr>
-                            ) : unpaidInvoices.map(invoice => (
+                            filteredUnpaid.length === 0 ? (
+                                <tr><td colSpan={7} className="text-center py-10 text-foreground-muted"><p className="font-semibold">{search || dateFrom || dateTo ? 'No results found.' : 'All caught up!'}</p></td></tr>
+                            ) : filteredUnpaid.map(invoice => (
                                 <tr key={invoice.id} onClick={() => onViewInvoice(invoice)} className="border-b border-border dark:border-dark-border last:border-b-0 hover:bg-muted dark:hover:bg-dark-muted cursor-pointer">
                                     <td className="px-6 py-4 font-bold text-foreground dark:text-dark-foreground">{invoice.invoiceNumber}</td>
                                     <td className="px-6 py-4 text-foreground dark:text-dark-foreground">{supplierMap[invoice.supplierId] || 'Unknown'}</td>
@@ -156,17 +215,24 @@ const AccountsPayableView = ({ invoices, suppliers, onRecordPayment, onViewInvoi
                                     <td className="px-6 py-4 font-mono font-bold text-foreground dark:text-dark-foreground">{formatCurrency(invoice.totalAmount - invoice.paidAmount)}</td>
                                     <td className="px-6 py-4"><StatusBadge status={invoice.status} /></td>
                                     <td className="px-6 py-4 text-right">
-                                        <button onClick={(e) => { e.stopPropagation(); handleRecordPaymentClick(invoice); }} className="font-medium text-primary dark:text-dark-primary hover:underline">
-                                            Record Payment
-                                        </button>
+                                        <div className="flex items-center justify-end gap-2">
+                                            <button onClick={(e) => { e.stopPropagation(); handleRecordPaymentClick(invoice); }} className="font-medium text-primary dark:text-dark-primary hover:underline text-xs">Record Payment</button>
+                                            <button onClick={(e) => downloadPDF(invoice, e)} disabled={downloadingId === invoice.id} title="Download PDF" className="flex items-center gap-1 text-xs font-medium text-foreground-muted hover:text-primary bg-muted dark:bg-dark-muted hover:bg-primary/10 px-2 py-1 rounded-md disabled:opacity-50">
+                                                {downloadingId === invoice.id ? <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>}
+                                                PDF
+                                            </button>
+                                        </div>
+                                        <div className="fixed -left-[9999px] -top-[9999px] pointer-events-none" aria-hidden="true">
+                                            <SupplierInvoiceDocument ref={el => { hiddenPdfRefs.current[invoice.id] = el; }} invoice={invoice} supplier={suppliers.find(s => s.id === invoice.supplierId)} purchaseOrder={purchaseOrders.find(po => po.id === invoice.purchaseOrderId)} settings={settings} />
+                                        </div>
                                     </td>
                                 </tr>
                             ))
                         ) : (
-                            paidInvoices.length === 0 ? (
-                                <tr><td colSpan={7} className="text-center py-10 text-foreground-muted">No paid invoices yet.</td></tr>
-                            ) : paidInvoices.map(invoice => (
-                                <tr key={invoice.id} className="border-b border-border dark:border-dark-border last:border-b-0 hover:bg-muted dark:hover:bg-dark-muted">
+                            filteredPaid.length === 0 ? (
+                                <tr><td colSpan={7} className="text-center py-10 text-foreground-muted">{search || dateFrom || dateTo ? 'No results found.' : 'No paid invoices yet.'}</td></tr>
+                            ) : filteredPaid.map(invoice => (
+                                <tr key={invoice.id} className="border-b border-border dark:border-dark-border last:border-b-0 hover:bg-muted dark:hover:bg-dark-muted cursor-pointer" onClick={() => onViewInvoice(invoice)}>
                                     <td className="px-6 py-4 font-bold text-foreground dark:text-dark-foreground">{invoice.invoiceNumber}</td>
                                     <td className="px-6 py-4 text-foreground dark:text-dark-foreground">{supplierMap[invoice.supplierId] || 'Unknown'}</td>
                                     <td className="px-6 py-4">{new Date(invoice.invoiceDate).toLocaleDateString('en-GB', {timeZone: 'Africa/Nairobi'})}</td>
@@ -174,10 +240,19 @@ const AccountsPayableView = ({ invoices, suppliers, onRecordPayment, onViewInvoi
                                     <td className="px-6 py-4 font-mono font-bold text-green-500">{formatCurrency(invoice.paidAmount)}</td>
                                     <td className="px-6 py-4"><StatusBadge status={invoice.status} /></td>
                                     <td className="px-6 py-4 text-right">
-                                        <button onClick={() => onViewInvoice(invoice)} className="font-medium text-primary dark:text-dark-primary hover:underline flex items-center gap-1 ml-auto">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"/></svg>
-                                            View / Download
-                                        </button>
+                                        <div className="flex items-center justify-end gap-2">
+                                            <button onClick={(e) => { e.stopPropagation(); onViewInvoice(invoice); }} className="font-medium text-primary dark:text-dark-primary hover:underline text-xs flex items-center gap-1">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"/></svg>
+                                                View
+                                            </button>
+                                            <button onClick={(e) => downloadPDF(invoice, e)} disabled={downloadingId === invoice.id} title="Download PDF" className="flex items-center gap-1 text-xs font-medium text-foreground-muted hover:text-primary bg-muted dark:bg-dark-muted hover:bg-primary/10 px-2 py-1 rounded-md disabled:opacity-50">
+                                                {downloadingId === invoice.id ? <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>}
+                                                PDF
+                                            </button>
+                                        </div>
+                                        <div className="fixed -left-[9999px] -top-[9999px] pointer-events-none" aria-hidden="true">
+                                            <SupplierInvoiceDocument ref={el => { hiddenPdfRefs.current[invoice.id] = el; }} invoice={invoice} supplier={suppliers.find(s => s.id === invoice.supplierId)} purchaseOrder={purchaseOrders.find(po => po.id === invoice.purchaseOrderId)} settings={settings} />
+                                        </div>
                                     </td>
                                 </tr>
                             ))

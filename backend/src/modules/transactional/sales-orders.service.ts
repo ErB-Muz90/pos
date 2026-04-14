@@ -20,7 +20,7 @@ export class SalesOrdersService {
     return this.prisma.salesOrder.create({ data: { ...dto, organizationId, soNumber } });
   }
 
-  async update(id: string, dto: any) {
-    return this.prisma.salesOrder.update({ where: { id }, data: dto });
+  async update(id: string, dto: any, organizationId: string) {
+    return this.prisma.salesOrder.update({ where: { id, organizationId }, data: dto });
   }
 }

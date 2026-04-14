@@ -54,13 +54,19 @@ export class AuthService {
     // Reset failed login attempts on successful login
     await this.resetFailedLoginAttempts(user.id);
 
-    // Check if user and organization are active
     if (user.status !== 'active') {
       throw new UnauthorizedException('User account is not active');
     }
 
-    if (user.organization.status !== 'active') {
-      throw new UnauthorizedException('Organization is not active');
+    // Platform super admins are not tenant-scoped.
+    if (user.role !== 'superadmin') {
+      if (!user.organization || user.organization.deletedAt) {
+        throw new UnauthorizedException('Organization is not active');
+      }
+
+      if (user.organization.status !== 'active') {
+        throw new UnauthorizedException('Organization is not active');
+      }
     }
 
     const { passwordHash, pinHash, ...result } = user;
@@ -100,7 +106,14 @@ export class AuthService {
 
     await this.resetFailedLoginAttempts(user.id);
 
-    if (user.status !== 'active' || user.organization.status !== 'active') {
+    if (user.status !== 'active') {
+      throw new UnauthorizedException('Account is not active');
+    }
+
+    if (
+      user.role !== 'superadmin' &&
+      (!user.organization || user.organization.deletedAt || user.organization.status !== 'active')
+    ) {
       throw new UnauthorizedException('Account is not active');
     }
 
@@ -311,6 +324,39 @@ export class AuthService {
 
     if (!user || user.status !== 'active') {
       throw new UnauthorizedException('User not found or inactive');
+    }
+
+    if (user.role === 'superadmin') {
+      const tokens = await this.generateTokens(user);
+
+      await this.prisma.userSession.update({
+        where: { id: validSessionId },
+        data: {
+          refreshTokenHash: await bcrypt.hash(tokens.refreshToken, 10),
+          lastActivityAt: new Date(),
+          expiresAt: this.getRefreshTokenExpiryDate(),
+        },
+      });
+
+      return tokens;
+    }
+
+    if (!user.organization || user.organization.deletedAt) {
+      throw new UnauthorizedException('Organization is not active');
+    }
+
+    // Block refresh if subscription has expired
+    if (
+      user.organization.subscriptionStatus !== 'active' &&
+      user.organization.subscriptionStatus !== 'trial'
+    ) {
+      throw new UnauthorizedException('Subscription expired');
+    }
+    if (
+      user.organization.subscriptionExpiresAt &&
+      new Date(user.organization.subscriptionExpiresAt) < new Date()
+    ) {
+      throw new UnauthorizedException('Subscription expired');
     }
 
     // Generate new tokens
@@ -599,5 +645,82 @@ export class AuthService {
     }
 
     return now;
+  }
+
+  /**
+   * Atomically create Organization + primary Branch + Admin user, return JWT
+   */
+  async registerOrg(dto: {
+    orgName: string;
+    businessType: string;
+    taxPin: string;
+    branchName: string;
+    adminUsername: string;
+    adminEmail: string;
+    adminPassword: string;
+    adminFullName: string;
+    ipAddress?: string;
+  }) {
+    const passwordHash = await bcrypt.hash(dto.adminPassword, 10);
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const org = await tx.organization.create({
+        data: {
+          name: dto.orgName,
+          businessType: dto.businessType,
+          taxPin: dto.taxPin,
+          subscriptionStatus: 'trial',
+          subscriptionExpiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
+        },
+      });
+
+      const branch = await tx.branch.create({
+        data: {
+          organizationId: org.id,
+          name: dto.branchName,
+          code: `BR-${org.id.slice(0, 6).toUpperCase()}`,
+          isPrimary: true,
+        },
+      });
+
+      const user = await tx.user.create({
+        data: {
+          organizationId: org.id,
+          branchId: branch.id,
+          username: dto.adminUsername,
+          email: dto.adminEmail,
+          fullName: dto.adminFullName,
+          passwordHash,
+          role: 'admin',
+        },
+      });
+
+      return { org, branch, user };
+    });
+
+    const tokens = await this.generateTokens({
+      id: result.user.id,
+      username: result.user.username,
+      role: result.user.role,
+      organizationId: result.org.id,
+      branchId: result.branch.id,
+    });
+
+    await this.createSession(result.user.id, tokens.refreshToken, dto.ipAddress || '');
+
+    this.logger.log(`New org registered: ${result.org.name} (${result.org.id})`);
+
+    return {
+      ...tokens,
+      user: {
+        id: result.user.id,
+        username: result.user.username,
+        email: result.user.email,
+        fullName: result.user.fullName,
+        role: result.user.role,
+        organizationId: result.org.id,
+        branchId: result.branch.id,
+      },
+    };
   }
 }

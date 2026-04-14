@@ -2,6 +2,7 @@ import { Controller, Get, Post, Delete, Body, Param, UseGuards } from '@nestjs/c
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { TenantResourceGuard, TenantModel } from '../../common/guards/tenant-resource.guard';
 import { HeldReceiptsService } from './held-receipts.service';
 
 @ApiTags('held-receipts')
@@ -22,7 +23,9 @@ export class HeldReceiptsController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.svc.remove(id);
+  @UseGuards(TenantResourceGuard)
+  @TenantModel('heldReceipt')
+  remove(@Param('id') id: string, @CurrentUser('organizationId') orgId: string) {
+    return this.svc.remove(id, orgId);
   }
 }

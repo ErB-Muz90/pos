@@ -1,9 +1,9 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Sale, User, Shift, Settings, Expense, SupplierPayment, BankDeposit } from '../types';
 import ZReportView from './pos/ZReportView';
 import { DEFAULT_SETTINGS } from '../constants'; // Import default settings
+import { ModernInput, ModernShell, ModernStatCard, ModernTableShell } from './common/ModernUI';
 
 interface ShiftReportViewProps {
   shifts: Shift[];
@@ -13,13 +13,6 @@ interface ShiftReportViewProps {
   bankDeposits: BankDeposit[];
   settings: Settings;
 }
-
-const StatCard: React.FC<{ title: string; value: string; className?: string }> = ({ title, value, className = '' }) => (
-    <div className={`bg-card dark:bg-dark-card p-4 rounded-lg shadow-sm border border-border dark:border-dark-border ${className}`}>
-        <p className="text-sm text-foreground-muted dark:text-dark-foreground-muted font-medium">{title}</p>
-        <p className={`text-xl font-bold text-foreground dark:text-dark-foreground`}>{value}</p>
-    </div>
-);
 
 const FilterButton: React.FC<{ label: string; filterKey: string; activeFilter: string; onClick: (filter: string) => void }> = ({ label, filterKey, activeFilter, onClick }) => (
     <button
@@ -158,8 +151,7 @@ const ShiftReportView: React.FC<ShiftReportViewProps> = ({ shifts, sales, expens
   }
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
-      <h1 className="text-3xl font-bold text-foreground dark:text-dark-foreground">Z-Reports (Closed Shifts)</h1>
+    <ModernShell eyebrow="Shift Analytics" title="Z-Reports" description="Review closed shifts, cash variance, and historical shift performance across any date range.">
 
       <div className="bg-card dark:bg-dark-card p-4 rounded-xl shadow-sm border border-border dark:border-dark-border space-y-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -173,23 +165,23 @@ const ShiftReportView: React.FC<ShiftReportViewProps> = ({ shifts, sales, expens
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-border dark:border-dark-border">
              <div>
                 <label htmlFor="dateFrom" className="text-sm font-medium text-foreground-muted dark:text-dark-foreground-muted">From</label>
-                <input type="date" id="dateFrom" value={dateFrom} onChange={e => handleDateInputChange(e, 'from')} className="w-full mt-1 px-4 py-2 rounded-lg border border-border dark:border-dark-border bg-background dark:bg-dark-background" />
+                <ModernInput type="date" id="dateFrom" value={dateFrom} onChange={e => handleDateInputChange(e, 'from')} className="w-full mt-1" />
             </div>
              <div>
                 <label htmlFor="dateTo" className="text-sm font-medium text-foreground-muted dark:text-dark-foreground-muted">To</label>
-                <input type="date" id="dateTo" value={dateTo} onChange={e => handleDateInputChange(e, 'to')} className="w-full mt-1 px-4 py-2 rounded-lg border border-border dark:border-dark-border bg-background dark:bg-dark-background" />
+                <ModernInput type="date" id="dateTo" value={dateTo} onChange={e => handleDateInputChange(e, 'to')} className="w-full mt-1" />
             </div>
         </div>
       </div>
 
        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard title="Total Sales" value={formatCurrency(summary.totalSales)} className="!text-primary dark:!text-dark-primary"/>
-            <StatCard title="Cash Sales" value={formatCurrency(summary.cashSales)} />
-            <StatCard title="Total Payouts" value={formatCurrency(summary.totalPayouts)} className="!text-warning dark:!text-dark-warning"/>
-            <StatCard title="Net Cash Variance" value={formatCurrency(summary.cashVariance)} className={summary.cashVariance < 0 ? '!text-danger' : '!text-green-600'}/>
+            <ModernStatCard title="Total Sales" value={formatCurrency(summary.totalSales)} subtitle="Closed-shift sales in range" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M12 2v20" /><path strokeLinecap="round" strokeLinejoin="round" d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14.5a3.5 3.5 0 0 1 0 7H6" /></svg>} accent="emerald" />
+            <ModernStatCard title="Cash Sales" value={formatCurrency(summary.cashSales)} subtitle="Cash-only sales posted by closed shifts" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="6" width="18" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /></svg>} accent="blue" />
+            <ModernStatCard title="Total Payouts" value={formatCurrency(summary.totalPayouts)} subtitle="Shift-linked payouts in range" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M7 12h10M10 18h4" /></svg>} accent="amber" />
+            <ModernStatCard title="Net Cash Variance" value={formatCurrency(summary.cashVariance)} subtitle="Aggregate variance across closed shifts" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 16h.01" /></svg>} accent={summary.cashVariance < 0 ? 'rose' : 'violet'} />
        </div>
 
-      <div className="bg-card dark:bg-dark-card rounded-xl shadow-md overflow-x-auto border border-border dark:border-dark-border">
+      <ModernTableShell title="Closed Shift Reports" description="Open any row to inspect the full historical Z-report.">
         <table className="w-full text-sm text-left text-foreground-muted dark:text-dark-foreground-muted">
           <thead className="text-xs text-foreground dark:text-dark-foreground uppercase bg-muted dark:bg-dark-muted">
             <tr>
@@ -228,8 +220,8 @@ const ShiftReportView: React.FC<ShiftReportViewProps> = ({ shifts, sales, expens
             )}
           </tbody>
         </table>
-      </div>
-    </div>
+      </ModernTableShell>
+    </ModernShell>
   );
 };
 

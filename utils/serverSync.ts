@@ -1,6 +1,7 @@
 import { Customer, Product, Role, User } from '../types';
 import { fetchApi, getAuthToken, getMe, isBackendConfigured, login as loginApi, clearAuthSession, clearCapabilitySnapshot } from './api';
 import * as db from './offlineDb';
+import { setOfflineDbTenant } from './offlineDb';
 
 type BackendUser = {
   id: string;
@@ -8,6 +9,7 @@ type BackendUser = {
   email?: string | null;
   fullName?: string | null;
   role?: string | null;
+  organizationId?: string | null;
 };
 
 type BackendProduct = {
@@ -91,6 +93,7 @@ export const mapBackendUserToFrontendUser = (user: BackendUser): User => ({
   email: user.email || undefined,
   username: user.username,
   role: mapBackendRole(user.role),
+  organizationId: user.organizationId || undefined,
 });
 
 const mapBackendProductToFrontendProduct = (product: BackendProduct): Product => {
@@ -197,6 +200,7 @@ export async function hydrateCoreStoresFromServer(): Promise<{
   products: Product[];
   customers: Customer[];
   users: User[];
+  serverSettings: Record<string, any> | null;
 }> {
   if (!canUseServerSync() || !getAuthToken()) {
     throw new Error('Server sync is not available for this browser session.');
@@ -204,6 +208,8 @@ export async function hydrateCoreStoresFromServer(): Promise<{
 
   const me = await getMe();
   const currentUser = mapBackendUserToFrontendUser(me);
+  // Scope IndexedDB to this org before any reads/writes
+  if (me.organizationId) setOfflineDbTenant(me.organizationId);
 
   // Gap 3 — A1: Check if capability snapshot is revoked
   try {
@@ -243,7 +249,10 @@ export async function hydrateCoreStoresFromServer(): Promise<{
 
   // Hydrate all transactional stores in parallel — failures are non-fatal
   const [sales, expenses, quotations, purchaseOrders, supplierInvoices,
-         layaways, workOrders, salesOrders, heldReceipts, shifts, settings, auditLogs] =
+         layaways, workOrders, salesOrders, heldReceipts, shifts, settings, auditLogs,
+         suppliers, timeClockEvents,
+         supplierPayments, bankDeposits, bankWithdrawals, stockMovements,
+         workOrderMaterials, accounts, accountingTransactions] =
     await Promise.all([
       fetchPaged('/sales'),
       fetchPaged('/expenses'),
@@ -257,6 +266,15 @@ export async function hydrateCoreStoresFromServer(): Promise<{
       fetchPaged('/sales/shifts'),
       fetchApi('/settings').catch(() => null),
       fetchPaged('/audit-logs'),
+      fetchPaged('/suppliers'),
+      fetchPaged('/time-clock-events'),
+      fetchPaged('/supplier-payments'),
+      fetchPaged('/bank-deposits'),
+      fetchPaged('/bank-withdrawals'),
+      fetchPaged('/stock-movements'),
+      fetchPaged('/work-order-materials'),
+      fetchPaged('/accounts'),
+      fetchPaged('/accounting-transactions'),
     ]);
 
   await Promise.all([
@@ -268,13 +286,22 @@ export async function hydrateCoreStoresFromServer(): Promise<{
     db.saveAllItems('quotations', quotations),
     db.saveAllItems('purchaseOrders', purchaseOrders),
     db.saveAllItems('supplierInvoices', supplierInvoices),
+    db.saveAllItems('suppliers', suppliers),
     db.saveAllItems('layaways', layaways),
     db.saveAllItems('workOrders', workOrders),
     db.saveAllItems('salesOrders', salesOrders),
     db.saveAllItems('heldReceipts', heldReceipts),
     db.saveAllItems('shifts', shifts),
     db.saveAllItems('auditLogs', auditLogs),
-    settings ? db.saveItem('settings', { id: 'settings', ...settings }) : Promise.resolve(),
+    db.saveAllItems('timeClockEvents', timeClockEvents),
+    db.saveAllItems('supplierPayments', supplierPayments),
+    db.saveAllItems('bankDeposits', bankDeposits),
+    db.saveAllItems('bankWithdrawals', bankWithdrawals),
+    db.saveAllItems('stockMovements', stockMovements),
+    db.saveAllItems('workOrderMaterials', workOrderMaterials),
+    db.saveAllItems('chartOfAccounts', accounts),
+    db.saveAllItems('accountingTransactions', accountingTransactions),
+    settings ? db.saveItem('settings', { id: 'banduka_pos_settings', ...settings }) : Promise.resolve(),
   ]);
 
   // Gap 6 — F5: Compute and store cloud-confirmed cash balance watermark
@@ -289,12 +316,13 @@ export async function hydrateCoreStoresFromServer(): Promise<{
     storeCloudConfirmedCash(cashIn - cashOut);
   } catch { /* non-fatal */ }
 
-  return { products, customers, users };
+  return { products, customers, users, serverSettings: settings ?? null };
 }
 
 export async function bootstrapSessionFromServer(): Promise<{
   currentUser: User;
   users: User[];
+  serverSettings: Record<string, any> | null;
 }> {
   if (!canUseServerSync() || !getAuthToken()) {
     throw new Error('No active authenticated backend session found.');
@@ -302,9 +330,9 @@ export async function bootstrapSessionFromServer(): Promise<{
 
   const me = await getMe();
   const currentUser = mapBackendUserToFrontendUser(me);
-  const { users } = await hydrateCoreStoresFromServer();
+  const { users, serverSettings } = await hydrateCoreStoresFromServer();
 
-  return { currentUser, users };
+  return { currentUser, users, serverSettings };
 }
 
 export async function loginAndBootstrapFromServer(
@@ -313,11 +341,8 @@ export async function loginAndBootstrapFromServer(
 ): Promise<{
   currentUser: User;
   users: User[];
+  serverSettings: Record<string, any> | null;
 }> {
-  await loginApi({
-    username,
-    password,
-  });
-
+  await loginApi({ username, password });
   return bootstrapSessionFromServer();
 }

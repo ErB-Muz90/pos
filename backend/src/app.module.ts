@@ -18,12 +18,16 @@ import { SalesModule } from './modules/sales/sales.module';
 import { ContractsModule } from './modules/contracts/contracts.module';
 import { TransactionalModule } from './modules/transactional/transactional.module';
 import { LedgerModule } from './modules/ledger/ledger.module';
+import { SuperAdminModule } from './modules/super-admin/super-admin.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TimeoutInterceptor } from './common/interceptors/timeout.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
+import { TenantResourceGuard } from './common/guards/tenant-resource.guard';
+import { SubscriptionGuard } from './common/guards/subscription.guard';
+import { SuperAdminGuard } from './common/guards/super-admin.guard';
 
 @Module({
   imports: [
@@ -37,11 +41,17 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
     // Scheduling for cron jobs
     ScheduleModule.forRoot(),
 
-    // Rate limiting
+    // Rate limiting — default 100/min, auth endpoints get a stricter 10/min tier
     ThrottlerModule.forRoot([
       {
-        ttl: 60000, // 60 seconds
-        limit: 100, // 100 requests per minute
+        name: 'default',
+        ttl: 60000,
+        limit: 100,
+      },
+      {
+        name: 'auth',
+        ttl: 60000,
+        limit: 10,
       },
     ]),
 
@@ -69,6 +79,9 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 
     // Step 3 — Append-only transaction ledger
     LedgerModule,
+
+    // Platform super admin
+    SuperAdminModule,
 
     // Feature modules will be added here as we build them
   ],
@@ -98,6 +111,15 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
     },
+    // Block writes on expired subscriptions globally
+    {
+      provide: APP_GUARD,
+      useClass: SubscriptionGuard,
+    },
+    // Available for injection in controllers via @UseGuards(TenantResourceGuard)
+    TenantResourceGuard,
+    SubscriptionGuard,
+    SuperAdminGuard,
   ],
 })
 export class AppModule {}

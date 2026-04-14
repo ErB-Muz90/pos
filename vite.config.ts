@@ -9,8 +9,29 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3006,
         host: '0.0.0.0',
+        // Serve /admin/* as static files — do NOT fall through to SPA index.html
+        fs: { strict: false },
       },
-      plugins: [react()],
+      plugins: [
+        react(),
+        {
+          name: 'admin-no-spa-fallback',
+          configureServer(server) {
+            // Return 404 for /admin paths not found as static files
+            // so Vite doesn't fall back to index.html for them
+            server.middlewares.use((req, res, next) => {
+              if (req.url?.startsWith('/admin') && !req.url.includes('.')) {
+                // redirect bare /admin or /admin/ to /admin/index.html
+                res.writeHead(302, { Location: '/admin/index.html' });
+                res.end();
+                return;
+              }
+              // /super-admin/* falls through to SPA index.html
+              next();
+            });
+          },
+        },
+      ],
       build: {
         // Optimize for Netlify
         outDir: 'dist',

@@ -6,7 +6,7 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Product, CartItem, Customer, Sale, View, Supplier, PurchaseOrder, SupplierInvoice, SupplierPayment, Role, User, SaleData, Settings, ToastData, AuditLog, Permission, Quotation, PurchaseOrderData, Shift, Payment, PurchaseOrderItem, ReceivedPOItem, TimeClockEvent, Expense, Layaway, WorkOrder, SalesOrder, HeldReceipt, SalesOrderItem, QuotationItem, QuotationData, LayawayPayment, DriveUser, Account, AccountingTransaction, JournalEntry, BankDeposit, BankWithdrawal, WorkOrderMaterial } from './types';
+import { Product, CartItem, Customer, Sale, View, Supplier, PurchaseOrder, SupplierInvoice, SupplierPayment, Role, User, SaleData, Settings, ToastData, AuditLog, Permission, Quotation, PurchaseOrderData, Shift, Payment, PurchaseOrderItem, ReceivedPOItem, TimeClockEvent, Expense, Layaway, WorkOrder, SalesOrder, HeldReceipt, SalesOrderItem, QuotationItem, QuotationData, LayawayPayment, DriveUser, Account, AccountingTransaction, JournalEntry, BankDeposit, BankWithdrawal, WorkOrderMaterial, StockMovement } from './types';
 import { DEFAULT_SETTINGS } from './constants';
 import { useTheme } from './hooks/useTheme';
 import * as db from './utils/offlineDb';
@@ -15,6 +15,7 @@ import * as drive from './utils/googleDrive';
 import { calculateCartTotals } from './utils/vatCalculator';
 import { canUseServerSync, hydrateCoreStoresFromServer, storeClockDrift, getAdjustedNow } from './utils/serverSync';
 import { fetchApi } from './utils/api';
+import { sanitizeText } from './utils/sanitize';
 
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -123,10 +124,11 @@ interface AppProps {
     onAddUser: (user: Omit<User, 'id'>) => Promise<void>;
     onUpdateUser: (user: User) => Promise<void>;
     onDeleteUser: (userId: string) => Promise<void>;
+    serverSettings?: Record<string, any> | null;
 }
 
 // FIX: Changed to named export to fix module resolution error in AuthView.tsx
-export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, onDeleteUser }: AppProps) => {
+export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, onDeleteUser, serverSettings }: AppProps) => {
     // --- Theming Hooks ---
     const [theme] = useTheme();
 
@@ -156,6 +158,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
 
     // --- Data State ---
     const [products, setProducts] = useState<Product[]>([]);
+    const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [sales, setSales] = useState<Sale[]>([]);
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -233,10 +236,11 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
             return;
         }
 
+        const timeoutMs = (settings.sessionTimeoutMinutes ?? 30) * 60 * 1000;
         let inactivityTimer: ReturnType<typeof setTimeout>;
         const resetTimer = () => {
             clearTimeout(inactivityTimer);
-            inactivityTimer = setTimeout(() => setIsLocked(true), 1000 * 60 * 5); // 5 minutes
+            inactivityTimer = setTimeout(() => setIsLocked(true), timeoutMs);
         };
 
         const events = ['mousemove', 'mousedown', 'keypress', 'touchstart'];
@@ -247,7 +251,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
             clearTimeout(inactivityTimer);
             events.forEach(event => window.removeEventListener(event, resetTimer));
         };
-    }, [currentUser]);
+    }, [currentUser, settings.sessionTimeoutMinutes]);
 
     // Sync local users state with the master list from AuthView
     useEffect(() => {
@@ -314,7 +318,8 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                     dbSupplierInvoices, dbSupplierPayments, dbQuotations, dbSettings, dbAuditLogs,
                     dbShifts, dbTimeClockEvents, dbExpenses, dbLayaways, dbWorkOrders, dbSalesOrders, dbHeldReceipts,
                     dbWorkOrderMaterials,
-                    dbChartOfAccounts, dbAccountingTransactions, dbBankDeposits
+                    dbChartOfAccounts, dbAccountingTransactions, dbBankDeposits, dbBankWithdrawals,
+                    dbStockMovements
                 ] = await Promise.all([
                     db.getAllItems<Product>('products'),
                     db.getAllItems<Customer>('customers'),
@@ -338,6 +343,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                     db.getAllItems<AccountingTransaction>('accountingTransactions'),
                     db.getAllItems<BankDeposit>('bankDeposits'),
                     db.getAllItems<BankWithdrawal>('bankWithdrawals'),
+                    db.getAllItems<StockMovement>('stockMovements'),
                 ]);
 
                 
@@ -377,6 +383,8 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                 setHeldReceipts(dbHeldReceipts);
                 setWorkOrderMaterials(dbWorkOrderMaterials);
                 setBankDeposits(dbBankDeposits);
+                setBankWithdrawals(dbBankWithdrawals);
+                setStockMovements(dbStockMovements.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
 
                 let accounts = dbChartOfAccounts;
                 // Ensure acc_bank exists (may be missing in older installs)
@@ -492,6 +500,27 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                     await db.saveItem('settings', currentSettings);
                 }
                 setAccountingTransactions(dbAccountingTransactions);
+                // Server settings win over stale IndexedDB — deep merge server on top
+                if (serverSettings && Object.keys(serverSettings).length > 0) {
+                    currentSettings = { ...currentSettings, ...serverSettings, id: currentSettings.id };
+                }
+
+                // Server-backed sessions may not persist the local-only setup flag.
+                // If an authenticated user has existing business data, treat setup as complete.
+                if (!currentSettings.isSetupComplete) {
+                    const hasExistingBusinessData =
+                        dbProducts.length > 0 ||
+                        dbCustomers.length > 0 ||
+                        dbSales.length > 0 ||
+                        dbSuppliers.length > 0 ||
+                        dbPurchaseOrders.length > 0;
+
+                    if (Boolean(currentUser?.id) && hasExistingBusinessData) {
+                        currentSettings = { ...currentSettings, isSetupComplete: true };
+                        await db.saveItem('settings', currentSettings);
+                    }
+                }
+
                 setSettings(currentSettings);
 
                 const currentActiveShift = dbShifts.find(s => s.userId === currentUser.id && s.status === 'active');
@@ -552,6 +581,17 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                     showToast(`Synced ${syncResult.success} offline sale${syncResult.success === 1 ? '' : 's'}.`, 'success');
                 }
 
+                // Retry queued supplier payments
+                const queuedPayments: any[] = await db.getAllItems('supplierPaymentQueue');
+                for (const qp of queuedPayments) {
+                    try {
+                        const { _endpoint, ...payment } = qp;
+                        pushToServer('POST', _endpoint, payment);
+                        await db.deleteItem('supplierPaymentQueue', qp.id);
+                    } catch { /* leave in queue for next retry */ }
+                }
+                if (queuedPayments.length > 0) showToast(`Synced ${queuedPayments.length} queued supplier payment(s).`, 'success');
+
                 if (canUseServerSync()) {
                     const hydrated = await hydrateCoreStoresFromServer();
                     setProducts(hydrated.products);
@@ -607,10 +647,19 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
 
     const handleUpdateSettings = async (updatedFields: Partial<Settings>) => {
         try {
+            // Sanitize free-text fields before persisting
+            if (updatedFields.receipt?.footer !== undefined) {
+                updatedFields = { ...updatedFields, receipt: { ...updatedFields.receipt, footer: sanitizeText(updatedFields.receipt.footer) } };
+            }
+            if (updatedFields.businessInfo?.name !== undefined) {
+                updatedFields = { ...updatedFields, businessInfo: { ...updatedFields.businessInfo, name: sanitizeText(updatedFields.businessInfo.name) } };
+            }
             const newSettings = { ...settings, ...updatedFields };
             setSettings(newSettings);
             await db.saveItem('settings', newSettings);
-            pushToServer('POST', '/settings', newSettings);
+            // Use PUT (partial merge) so a partial update from one device
+            // doesn't overwrite keys changed by another device
+            pushToServer('PUT', '/settings', updatedFields);
         } catch (error) {
             console.error("Failed to update settings", error);
             showToast('Failed to save settings.', 'error');
@@ -1018,7 +1067,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                         await handleUpdateQuotation({ ...linkedQuote, status: 'Converted' });
                     }
                 }
-                updatedWO = { ...updatedWO, closedAt: new Date().toISOString() };
+                updatedWO = { ...updatedWO, closedAt: new Date() };
                 await logAudit('Work Order Closed', `WO ${updatedWO.id} closed. COGS posted.`);
             }
 
@@ -1052,7 +1101,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
             const newSale: Sale = {
                 ...saleData,
                 ...saleWithOrigin,
-                id: `${settings.receipt.invoicePrefix}${Date.now()}`,
+                id: `${settings.receipt.invoicePrefix}${String(await db.getNextSequence('invoice')).padStart(6, '0')}`,
                 synced: false,
                 cashierId: currentUser.id,
                 cashierName: currentUser.name,
@@ -1073,7 +1122,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                         const productIndex = updatedProducts.findIndex(p => p.id === soItem.productId);
                         if (productIndex !== -1 && updatedProducts[productIndex].productType === 'Inventory') {
                             const product = updatedProducts[productIndex];
-                            const newStock = product.stock - soItem.quantity;
+                            const newStock = Math.max(0, product.stock - soItem.quantity);
                             const newReservedStock = (product.reservedStock || 0) - soItem.quantity;
 
                             updatedProducts[productIndex] = { ...product, stock: newStock, reservedStock: Math.max(0, newReservedStock) };
@@ -1102,7 +1151,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                         const productIndex = updatedProducts.findIndex(p => p.id === item.id);
                         if (productIndex !== -1) {
                             const product = updatedProducts[productIndex];
-                            const newStock = product.stock - item.quantity;
+                            const newStock = Math.max(0, product.stock - item.quantity);
                             updatedProducts[productIndex] = { ...product, stock: newStock };
                             await db.saveItem('products', updatedProducts[productIndex]);
                         }
@@ -1207,7 +1256,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                         const updatedWO = { 
                             ...wo, 
                             status: isFullyPaid ? 'Completed' as const : wo.status, 
-                            updatedAt: new Date().toISOString(),
+                            updatedAt: new Date(),
                             // FIX: Changed depositPaid to amountPaid to match WorkOrder type.
                             amountPaid: newTotalPaid,
                             balanceDue: newBalanceDue,
@@ -1580,7 +1629,11 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
             // DB operations
             await db.saveItem('supplierInvoices', updatedInvoice);
             await db.saveItem('supplierPayments', newPayment);
-            pushToServer('POST', `/supplier-invoices/${updatedInvoice.id}/payment`, newPayment);
+            if (navigator.onLine) {
+                pushToServer('POST', `/supplier-invoices/${updatedInvoice.id}/payment`, newPayment);
+            } else {
+                await db.saveItem('supplierPaymentQueue', { ...newPayment, _endpoint: `/supplier-invoices/${updatedInvoice.id}/payment` });
+            }
             
             // State updates
             const updatedInvoices = [...supplierInvoices];
@@ -1797,6 +1850,8 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
 
             const newProduct: Product = {
                 ...productData,
+                name: sanitizeText(productData.name),
+                description: productData.description ? sanitizeText(productData.description) : undefined,
                 id: `prod_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                 stock: 0,
                 reservedStock: 0,
@@ -1840,6 +1895,30 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
         }
     };
     
+    const handleStockAdjust = async (productId: string, quantity: number, type: string, reason: string) => {
+        const product = products.find(p => p.id === productId);
+        if (!product) return;
+        const newStock = product.stock + quantity;
+        const movement: StockMovement = {
+            id: `mov_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            productId,
+            branchId: 'local',
+            type: type as StockMovement['type'],
+            quantity,
+            quantityBefore: product.stock,
+            quantityAfter: newStock,
+            reason,
+            createdAt: new Date(),
+        };
+        const updatedProduct = { ...product, stock: newStock };
+        await db.saveItem('products', updatedProduct);
+        await db.saveItem('stockMovements', movement);
+        setProducts(prev => prev.map(p => p.id === productId ? updatedProduct : p));
+        setStockMovements(prev => [movement, ...prev]);
+        await logAudit('Stock Adjusted', `${type}: ${product.name} qty ${quantity > 0 ? '+' : ''}${quantity} (${reason || 'no reason'})`);
+        showToast('Stock adjusted successfully.', 'success');
+    };
+
     // FIX: Add customer CRUD handlers to resolve errors.
     const handleAddCustomer = async (customerData: Omit<Customer, 'id' | 'dateAdded' | 'loyaltyPoints'>) => {
         try {
@@ -1948,7 +2027,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
     // --- Purchase Order Action Handlers ---
     const handleAddPurchaseOrder = async (poData: PurchaseOrderData): Promise<PurchaseOrder> => {
         try {
-            const poNumber = `${settings.receipt.poNumberPrefix}${Date.now()}`;
+            const poNumber = `${settings.receipt.poNumberPrefix}${String(await db.getNextSequence('po')).padStart(5, '0')}`;
             const totalCost = poData.items.reduce((acc, item) => acc + item.cost * item.quantity, 0);
 
             const { orderDate, ...restOfPoData } = poData;
@@ -2168,7 +2247,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
 
         try {
             const newSO: SalesOrder = {
-                id: `${settings.receipt.salesOrderPrefix}${Date.now()}`,
+                id: `${settings.receipt.salesOrderPrefix}${String(await db.getNextSequence('so')).padStart(5, '0')}`,
                 cashierId: currentUser.id,
                 cashierName: currentUser.name,
                 shiftId: activeShift.id,
@@ -2356,7 +2435,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
         }
 
         try {
-            const layawayId = `${settings.receipt.layawayPrefix}${Date.now()}`;
+            const layawayId = `${settings.receipt.layawayPrefix}${String(await db.getNextSequence('layaway')).padStart(5, '0')}`;
             // 1. Create the Sale record for the deposit first to get a saleId
             const depositItem: CartItem = {
                 id: `LAYAWAY_DEPOSIT_${layawayId}`, name: `Layaway Deposit for #${layawayId}`,
@@ -2523,9 +2602,10 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                 settings.tax.vatRate / 100
             );
     
+            const quoteSeq = await db.getNextSequence('quote');
             const newQuotation: Quotation = {
-                id: `quo_${Date.now()}`,
-                quoteNumber: `${settings.receipt.quotePrefix}${Date.now()}`,
+                id: `quo_${String(quoteSeq).padStart(5, '0')}`,
+                quoteNumber: `${settings.receipt.quotePrefix}${String(quoteSeq).padStart(5, '0')}`,
                 customerId: quotationData.customerId,
                 customerName: customer.name,
                 items: quotationData.items,
@@ -2536,7 +2616,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                 discountAmount: totalDiscountAmount,
                 tax,
                 total,
-                notes: quotationData.notes,
+                notes: quotationData.notes ? sanitizeText(quotationData.notes) : undefined,
             };
     
             await db.saveItem('quotations', newQuotation);
@@ -2556,6 +2636,12 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
     
     const handleUpdateQuotation = async (quotation: Quotation) => {
         try {
+            // Block any mutation of a Converted or Invoiced quotation
+            const existing = quotations.find(q => q.id === quotation.id);
+            if (existing && (existing.status === 'Converted' || existing.status === 'Invoiced')) {
+                showToast(`Quotation ${quotation.quoteNumber} has already been converted and cannot be modified.`, 'error');
+                return;
+            }
             await db.saveItem('quotations', quotation);
             setQuotations(prev => prev.map(q => q.id === quotation.id ? quotation : q));
             pushToServer('PUT', `/quotations/${quotation.id}`, quotation);
@@ -2752,13 +2838,13 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
             }
 
             const newWO: WorkOrder = {
-                id: `${settings.receipt.workOrderPrefix}${Date.now()}`,
+                id: `${settings.receipt.workOrderPrefix}${String(await db.getNextSequence('wo')).padStart(5, '0')}`,
                 cashierId: currentUser.id,
                 cashierName: currentUser.name,
                 shiftId: activeShift.id,
                 ...workOrderData,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
+                createdAt: new Date(),
+                updatedAt: new Date(),
             };
     
             await db.saveItem('workOrders', newWO);
@@ -2813,7 +2899,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
     const handlePushWOToPOS = (workOrder: WorkOrder) => {
         if (workOrder.balanceDue <= 0) {
             showToast('Work Order is fully paid.', 'info');
-            const updatedWO = { ...workOrder, status: 'Completed' as const, updatedAt: new Date().toISOString() };
+            const updatedWO = { ...workOrder, status: 'Completed' as const, updatedAt: new Date() };
             handleUpdateWorkOrder(updatedWO);
             return;
         }
@@ -2873,7 +2959,22 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
     }
     
     if (isAppLoading) {
-        return <div className="h-screen w-screen flex items-center justify-center">Loading Application...</div>;
+        return (
+            <div className="h-screen w-screen flex flex-col items-center justify-center bg-background dark:bg-dark-background gap-4">
+                <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-9 w-9 text-primary-content" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                </div>
+                <p className="text-lg font-bold text-foreground dark:text-dark-foreground">Bandu POS</p>
+                <div className="flex gap-1.5">
+                    {[0,1,2].map(i => (
+                        <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+                    ))}
+                </div>
+                <p className="text-sm text-foreground-muted dark:text-dark-foreground-muted">Loading your data...</p>
+            </div>
+        );
     }
     
     if (isLocked) {
@@ -2940,6 +3041,8 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                     onImportProducts={handleImportProducts}
                     onPrintBarcodeRequest={setProductForBarcode}
                     onAddToPORequest={setProductForPO}
+                    onStockAdjust={handleStockAdjust}
+                    stockMovements={stockMovements}
                     settings={settings}
                  />;
             case View.Purchases:
@@ -2993,6 +3096,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                     <AccountsPayableView
                         invoices={supplierInvoices}
                         suppliers={suppliers}
+                        purchaseOrders={purchaseOrders}
                         onRecordPayment={handleRecordSupplierPayment}
                         onViewInvoice={setInvoiceToView}
                         activeShift={activeShift}

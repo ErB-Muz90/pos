@@ -256,3 +256,4 @@ const Sidebar = ({ currentView, setCurrentView, isOpen, setIsOpen, currentUser, 
 );
 
 export default Sidebar;
+/* Updated Tue Apr 14 19:28:09 EAT 2026 */

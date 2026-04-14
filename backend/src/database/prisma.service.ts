@@ -1,6 +1,14 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 
+// Models that must always be scoped to an organization
+const TENANT_MODELS = new Set([
+  'Product', 'Sale', 'Customer', 'Category', 'Branch', 'User',
+  'BranchInventory', 'InventoryMovement', 'Shift', 'Expense',
+  'PurchaseOrder', 'SupplierInvoice', 'Supplier', 'Quotation', 'Layaway',
+  'WorkOrder', 'SalesOrder', 'HeldReceipt', 'AuditLog', 'TimeClockEvent',
+]);
+
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
@@ -18,6 +26,23 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   async onModuleInit() {
+    // Tenant safety middleware — warn when a tenant-scoped model is queried without organizationId
+    this.$use(async (params, next) => {
+      if (
+        params.model &&
+        TENANT_MODELS.has(params.model) &&
+        ['findMany', 'findFirst', 'count', 'updateMany', 'deleteMany'].includes(params.action)
+      ) {
+        const where = params.args?.where;
+        if (!where?.organizationId) {
+          this.logger.warn(
+            `[TENANT] ${params.model}.${params.action} called WITHOUT organizationId filter`,
+          );
+        }
+      }
+      return next(params);
+    });
+
     try {
       await this.$connect();
       this.logger.log('✅ Database connected successfully');

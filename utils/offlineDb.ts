@@ -1,21 +1,45 @@
 // FIX: Replace 'Payout' with 'Expense' as 'Payout' is not an exported member of types.
-import { CartItem, Sale, Product, Customer, Supplier, PurchaseOrder, SupplierInvoice, Quotation, User, Settings, AuditLog, Shift, TimeClockEvent, Expense, Layaway, WorkOrder, SalesOrder, HeldReceipt, SupplierPayment, Account, AccountingTransaction, BankDeposit, WorkOrderMaterial, WorkOrderPayment, BankWithdrawal } from '../types';
+import { CartItem, Sale, Product, Customer, Supplier, PurchaseOrder, SupplierInvoice, Quotation, User, Settings, AuditLog, Shift, TimeClockEvent, Expense, Layaway, WorkOrder, SalesOrder, HeldReceipt, SupplierPayment, Account, AccountingTransaction, BankDeposit, WorkOrderMaterial, WorkOrderPayment, BankWithdrawal, StockMovement } from '../types';
 import { fetchApi, getAuthToken } from './api';
 
-const DB_NAME = 'BandukaPOS-DB';
-const DB_VERSION = 15;
+const DB_VERSION = 16;
 const STORES = [
     'products', 'customers', 'sales', 'suppliers', 'purchaseOrders',
     'supplierInvoices', 'quotations', 'users', 'settings', 'auditLogs',
     'shifts', 'cart', 'orderQueue', 'timeClockEvents', 'payouts',
     'layaways', 'workOrders', 'salesOrders', 'heldReceipts', 'supplierPayments',
     'chartOfAccounts', 'accountingTransactions', 'bankDeposits', 'bankWithdrawals',
-    'workOrderMaterials', 'workOrderPayments'
+    'workOrderMaterials', 'workOrderPayments', 'stockMovements', 'supplierPaymentQueue'
 ];
 
 
 let db: IDBDatabase | null = null;
 let initPromise: Promise<IDBDatabase> | null = null;
+const TENANT_KEY = 'banduka_pos_tenant_org_id';
+
+let _tenantOrgId = (() => {
+  if (typeof window === 'undefined') return 'default';
+  return localStorage.getItem(TENANT_KEY) || 'default';
+})();
+/** Call this immediately after login with the authenticated user's organizationId */
+export const setOfflineDbTenant = (orgId: string) => {
+  const nextOrgId = orgId || 'default';
+  if (typeof window !== 'undefined') {
+    if (nextOrgId === 'default') {
+      localStorage.removeItem(TENANT_KEY);
+    } else {
+      localStorage.setItem(TENANT_KEY, nextOrgId);
+    }
+  }
+  if (nextOrgId !== _tenantOrgId) {
+    // Close existing connection so next initDB() opens the correct org DB
+    db?.close();
+    db = null;
+    initPromise = null;
+    _tenantOrgId = nextOrgId;
+  }
+};
+const getDbName = () => `BandukaPOS-DB-${_tenantOrgId}`;
 const DATE_FIELDS = [
     'date',
     'dateAdded',
@@ -30,6 +54,12 @@ const DATE_FIELDS = [
     'clockInTime',
     'clockOutTime',
     'heldAt',
+    'createdAt',
+    'updatedAt',
+    'closedAt',
+    'promisedDate',
+    'paymentDate',
+    'receivedDate',
 ];
 
 function promisifyRequest<T>(request: IDBRequest<T>): Promise<T> {
@@ -50,7 +80,7 @@ export function initDB(): Promise<IDBDatabase> {
     console.log('[DB] Initializing IndexedDB...');
 
     initPromise = new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        const request = indexedDB.open(getDbName(), DB_VERSION);
 
         request.onupgradeneeded = (event) => {
             const dbInstance = (event.target as IDBOpenDBRequest).result;
@@ -109,16 +139,27 @@ export async function saveItem<T extends {id: string}>(storeName:string, item: T
 
 export async function saveAllItems<T extends {id: string}>(storeName: string, items: T[]): Promise<void> {
     const store = await getStore(storeName, 'readwrite');
-    // Clear before saving all to ensure a clean slate, useful for cart-like stores
-    await promisifyRequest(store.clear());
+    // Use put (upsert) to merge server data with local data — preserves offline-only records
     for(const item of items) {
-        await promisifyRequest(store.add(item));
+        await promisifyRequest(store.put(item));
     }
 }
 
 export async function deleteItem(storeName: string, id: string): Promise<void> {
     const store = await getStore(storeName, 'readwrite');
     await promisifyRequest(store.delete(id));
+}
+
+/**
+ * Atomically increment and return the next sequence number for a document type.
+ * Stored in the 'settings' store under id `seq_<key>`.
+ */
+export async function getNextSequence(key: string): Promise<number> {
+    const seqId = `seq_${key}`;
+    const existing = await getItem<{ id: string; value: number }>('settings', seqId);
+    const next = (existing?.value ?? 0) + 1;
+    await saveItem('settings', { id: seqId, value: next });
+    return next;
 }
 
 // --- Offline Order Queue Specific ---
@@ -227,12 +268,17 @@ export async function restoreAllData(data: Record<string, any[]>): Promise<void>
 
 export async function wipeDatabase(): Promise<void> {
     try {
+        const dbName = getDbName();
         if (db) {
             db.close();
             db = null;
             initPromise = null;
         }
-        await promisifyRequest(indexedDB.deleteDatabase(DB_NAME));
+        await promisifyRequest(indexedDB.deleteDatabase(dbName));
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem(TENANT_KEY);
+        }
+        _tenantOrgId = 'default';
     } catch (error) {
         console.error("Error wiping the database:", error);
         throw new Error("Failed to wipe database. Please clear your browser's site data manually.");

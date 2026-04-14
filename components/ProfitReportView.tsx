@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { Sale, Product, Expense, Settings, ToastData } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { motion } from 'framer-motion';
 import { useTheme } from '../hooks/useTheme';
+import { ModernShell, ModernStatCard } from './common/ModernUI';
 
 interface ProfitReportViewProps {
     sales: Sale[];
@@ -11,16 +11,6 @@ interface ProfitReportViewProps {
     settings: Settings;
     showToast: (message: string, type: ToastData['type']) => void;
 }
-
-const StatCard: React.FC<{ title: string; value: string; className?: string }> = ({ title, value, className = '' }) => (
-    <motion.div
-        className={`bg-card dark:bg-dark-card p-4 rounded-xl shadow-clay-light dark:shadow-clay-dark border border-border dark:border-dark-border ${className}`}
-        variants={{ hidden: { y: 20, opacity: 0 }, visible: { y: 0, opacity: 1 } }}
-    >
-        <p className="text-sm font-semibold text-foreground-muted dark:text-dark-foreground-muted">{title}</p>
-        <p className={`text-2xl font-bold text-foreground dark:text-dark-foreground mt-1`}>{value}</p>
-    </motion.div>
-);
 
 const DateButton: React.FC<{ label: string; range: 'today' | 'week' | 'month'; activeRange: string; onClick: (range: any) => void }> = ({ label, range, activeRange, onClick }) => (
     <button
@@ -184,29 +174,29 @@ const ProfitReportView: React.FC<ProfitReportViewProps> = ({ sales, products, ex
     const gridColor = theme === 'dark' ? '#444444' : '#E0E0E0';
     const textColor = theme === 'dark' ? '#BDBDBD' : '#616161';
 
+    const reportIcons = {
+        revenue: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M12 2v20" /><path strokeLinecap="round" strokeLinejoin="round" d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14.5a3.5 3.5 0 0 1 0 7H6" /></svg>,
+        cogs: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z" /></svg>,
+        expense: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M7 12h10M10 18h4" /></svg>,
+        profit: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="m4 14 5-5 4 4 7-7" /><path strokeLinecap="round" strokeLinejoin="round" d="M20 10V6h-4" /></svg>,
+        margin: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 16h.01" /></svg>,
+    };
+
     return (
-        <div className="p-4 md:p-8 h-full overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-foreground dark:text-dark-foreground">Profit & Loss</h1>
-                <div className="flex space-x-1 bg-muted dark:bg-dark-muted p-1 rounded-lg">
+        <ModernShell eyebrow="Profitability" title="Profit & Loss" description="Revenue, cost of goods, expenses, and margin performance for the selected operating window.">
+            <div className="flex space-x-1 bg-muted dark:bg-dark-muted p-1 rounded-lg w-fit">
                     <DateButton label="Today" range="today" activeRange={dateRange} onClick={setDateRange} />
                     <DateButton label="This Week" range="week" activeRange={dateRange} onClick={setDateRange} />
                     <DateButton label="This Month" range="month" activeRange={dateRange} onClick={setDateRange} />
-                </div>
             </div>
 
-            <motion.div
-                 className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-6"
-                 variants={{ hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.05 } } }}
-                 initial="hidden"
-                 animate="visible"
-            >
-                <StatCard title="Total Revenue" value={formatCurrency(summaryStats.totalRevenue)} />
-                <StatCard title="COGS" value={formatCurrency(summaryStats.totalCogs)} />
-                <StatCard title="Other Expenses" value={formatCurrency(summaryStats.totalPayouts)} />
-                <StatCard title="Net Profit" value={formatCurrency(summaryStats.netProfit)} className={summaryStats.netProfit < 0 ? 'text-danger dark:text-dark-danger' : 'text-success dark:text-dark-success'} />
-                <StatCard title="Profit Margin" value={`${summaryStats.margin.toFixed(2)}%`} className={summaryStats.margin < 0 ? 'text-danger dark:text-dark-danger' : 'text-success dark:text-dark-success'} />
-            </motion.div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                <ModernStatCard title="Total Revenue" value={formatCurrency(summaryStats.totalRevenue)} subtitle="Gross sales in range" icon={reportIcons.revenue} accent="emerald" />
+                <ModernStatCard title="COGS" value={formatCurrency(summaryStats.totalCogs)} subtitle="Direct product cost" icon={reportIcons.cogs} accent="amber" />
+                <ModernStatCard title="Other Expenses" value={formatCurrency(summaryStats.totalPayouts)} subtitle="Operating expenses only" icon={reportIcons.expense} accent="rose" />
+                <ModernStatCard title="Net Profit" value={formatCurrency(summaryStats.netProfit)} subtitle="After cost and expense" icon={reportIcons.profit} accent={summaryStats.netProfit < 0 ? 'rose' : 'emerald'} />
+                <ModernStatCard title="Profit Margin" value={`${summaryStats.margin.toFixed(2)}%`} subtitle="Net profit as % of revenue" icon={reportIcons.margin} accent={summaryStats.margin < 0 ? 'rose' : 'blue'} />
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                  <div className="lg:col-span-3 bg-card dark:bg-dark-card p-4 rounded-xl shadow-sm border border-border dark:border-dark-border">
@@ -236,7 +226,7 @@ const ProfitReportView: React.FC<ProfitReportViewProps> = ({ sales, products, ex
                      </ResponsiveContainer>
                  </div>
             </div>
-        </div>
+        </ModernShell>
     );
 };
 

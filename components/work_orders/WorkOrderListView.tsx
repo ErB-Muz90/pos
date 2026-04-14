@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
-import { WorkOrder, User, Customer } from '../../types';
-import { motion } from 'framer-motion';
+import { Customer, User, WorkOrder } from '../../types';
+import { ModernButton, ModernEmptyState, ModernShell, ModernStatCard, ModernTableShell } from '../common/ModernUI';
 
 interface WorkOrderListViewProps {
     workOrders: WorkOrder[];
@@ -10,107 +10,93 @@ interface WorkOrderListViewProps {
     onCreateRequest: () => void;
 }
 
-const StatCard: React.FC<{ title: string; count: number, className?: string }> = ({ title, count, className }) => (
-    <div className={`bg-card dark:bg-dark-card p-4 rounded-xl shadow-sm border border-border dark:border-dark-border ${className}`}>
-        <p className="text-sm font-semibold text-foreground-muted dark:text-dark-foreground-muted">{title}</p>
-        <p className="text-3xl font-bold text-foreground dark:text-dark-foreground">{count}</p>
-    </div>
-);
-
 const StatusBadge: React.FC<{ status: WorkOrder['status'] }> = ({ status }) => {
-    let colorClasses = 'text-slate-800 bg-slate-100 dark:bg-slate-700 dark:text-slate-300';
-    switch (status) {
-        case 'Pending': colorClasses = 'text-yellow-800 bg-yellow-100 dark:bg-yellow-900/50 dark:text-yellow-300'; break;
-        case 'In Progress': colorClasses = 'text-sky-800 bg-sky-100 dark:bg-sky-900/50 dark:text-sky-300'; break;
-        case 'Awaiting Parts': colorClasses = 'text-indigo-800 bg-indigo-100 dark:bg-indigo-900/50 dark:text-indigo-300'; break;
-        case 'Ready for Pickup': colorClasses = 'text-blue-800 bg-blue-100 dark:bg-blue-900/50 dark:text-blue-300'; break;
-        case 'Completed': colorClasses = 'text-green-800 bg-green-100 dark:bg-green-900/50 dark:text-green-300'; break;
-        case 'Delivered': colorClasses = 'text-violet-800 bg-violet-100 dark:bg-violet-900/50 dark:text-violet-300'; break;
-        case 'Cancelled': colorClasses = 'text-red-800 bg-red-100 dark:bg-red-900/50 dark:text-red-300'; break;
-    }
-    return <span className={`px-2 py-1 text-xs font-semibold rounded-full capitalize ${colorClasses}`}>{status.toLowerCase()}</span>;
+    const colorClasses = {
+        Pending: 'bg-amber-500/12 text-amber-700 dark:text-amber-300',
+        'In Progress': 'bg-sky-500/12 text-sky-700 dark:text-sky-300',
+        'Awaiting Parts': 'bg-indigo-500/12 text-indigo-700 dark:text-indigo-300',
+        'Ready for Pickup': 'bg-blue-500/12 text-blue-700 dark:text-blue-300',
+        Completed: 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300',
+        Delivered: 'bg-violet-500/12 text-violet-700 dark:text-violet-300',
+        Cancelled: 'bg-rose-500/12 text-rose-700 dark:text-rose-300',
+    } as const;
+
+    return <span className={`rounded-full px-3 py-1 text-xs font-semibold ${colorClasses[status]}`}>{status}</span>;
+};
+
+const icons = {
+    pending: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 2" /></svg>,
+    progress: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="m4 14 5-5 4 4 7-7" /><path strokeLinecap="round" strokeLinejoin="round" d="M20 10V6h-4" /></svg>,
+    completed: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="m9 12 2 2 4-4" /><circle cx="12" cy="12" r="9" /></svg>,
+    delivered: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7h13l5 5v5h-2" /><path strokeLinecap="round" strokeLinejoin="round" d="M5 17h8" /><circle cx="7.5" cy="17.5" r="1.5" /><circle cx="17.5" cy="17.5" r="1.5" /></svg>,
+    plus: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14m7-7H5" /></svg>,
 };
 
 const WorkOrderListView: React.FC<WorkOrderListViewProps> = ({ workOrders, onViewWorkOrder, onCreateRequest }) => {
-    
-    const sortedWorkOrders = useMemo(() => 
-        [...workOrders].sort((a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime()),
-        [workOrders]
-    );
-    
+    const sortedWorkOrders = useMemo(() => [...workOrders].sort((a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime()), [workOrders]);
+
     const summaryCards = useMemo(() => {
         const counts = { Pending: 0, 'In Progress': 0, Completed: 0, Delivered: 0 };
-        workOrders.forEach(wo => {
-            if(wo.status === 'Pending') counts.Pending++;
-            if(wo.status === 'In Progress') counts['In Progress']++;
-            if(wo.status === 'Completed') counts.Completed++;
-            if(wo.status === 'Delivered') counts.Delivered++;
+        workOrders.forEach((workOrder) => {
+            if (workOrder.status === 'Pending') counts.Pending++;
+            if (workOrder.status === 'In Progress') counts['In Progress']++;
+            if (workOrder.status === 'Completed') counts.Completed++;
+            if (workOrder.status === 'Delivered') counts.Delivered++;
         });
         return counts;
     }, [workOrders]);
 
     return (
-        <div className="p-4 md:p-6 bg-muted dark:bg-dark-muted min-h-full">
-            <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-foreground dark:text-dark-foreground">Work Orders</h1>
-                    <p className="text-sm text-foreground-muted dark:text-dark-foreground-muted">Manage repair, service, and custom work orders</p>
-                </div>
-                <motion.button 
-                    onClick={onCreateRequest}
-                    whileTap={{ scale: 0.95 }}
-                    className="bg-primary text-primary-content font-bold px-4 py-2 rounded-lg hover:bg-primary-focus transition-colors shadow-sm flex items-center"
-                >
-                    + Create Work Order
-                </motion.button>
+        <ModernShell
+            eyebrow="Service Ops"
+            title="Work Orders"
+            description="Manage repair, service, and custom job progress with the same modern operational treatment used across the POS."
+            actions={<ModernButton onClick={onCreateRequest}>{icons.plus}Create Work Order</ModernButton>}
+        >
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <ModernStatCard title="Pending" value={summaryCards.Pending} subtitle="Jobs not yet started" icon={icons.pending} accent="amber" />
+                <ModernStatCard title="In Progress" value={summaryCards['In Progress']} subtitle="Jobs currently being worked" icon={icons.progress} accent="blue" />
+                <ModernStatCard title="Completed" value={summaryCards.Completed} subtitle="Jobs ready for final handoff" icon={icons.completed} accent="emerald" />
+                <ModernStatCard title="Delivered" value={summaryCards.Delivered} subtitle="Closed and handed over jobs" icon={icons.delivered} accent="violet" />
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <StatCard title="Pending" count={summaryCards.Pending} className="border-l-4 border-yellow-500" />
-                <StatCard title="In Progress" count={summaryCards['In Progress']} className="border-l-4 border-sky-500" />
-                <StatCard title="Completed" count={summaryCards.Completed} className="border-l-4 border-green-500" />
-                <StatCard title="Delivered" count={summaryCards.Delivered} className="border-l-4 border-violet-500" />
-            </div>
-            
-            <div className="bg-card dark:bg-dark-card rounded-lg shadow-sm overflow-hidden border border-border dark:border-dark-border">
-                <div className="p-4 border-b border-border dark:border-dark-border">
-                    <h2 className="text-lg font-semibold text-foreground dark:text-dark-foreground">All Work Orders</h2>
-                </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left text-foreground-muted dark:text-dark-foreground-muted">
-                        <thead className="text-xs text-foreground dark:text-dark-foreground uppercase bg-muted dark:bg-dark-muted">
-                            <tr>
-                                <th className="px-6 py-3">WO #</th>
-                                <th className="px-6 py-3">Customer</th>
-                                <th className="px-6 py-3">Title</th>
-                                <th className="px-6 py-3">Promised By</th>
-                                <th className="px-6 py-3 text-right">Balance Due</th>
-                                <th className="px-6 py-3 text-center">Status</th>
-                                <th className="px-6 py-3 text-center">Actions</th>
+            <ModernTableShell title="Work Order Register" description="Open any work order to inspect job details, balance, and status transitions.">
+                <table className="w-full text-sm">
+                    <thead className="bg-slate-50/80 text-left text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:bg-slate-950/60 dark:text-slate-400">
+                        <tr>
+                            <th className="px-6 py-4">WO #</th>
+                            <th className="px-6 py-4">Customer</th>
+                            <th className="px-6 py-4">Title</th>
+                            <th className="px-6 py-4">Promised By</th>
+                            <th className="px-6 py-4 text-right">Balance Due</th>
+                            <th className="px-6 py-4 text-center">Status</th>
+                            <th className="px-6 py-4 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200/80 dark:divide-white/10">
+                        {sortedWorkOrders.map((workOrder) => (
+                            <tr key={workOrder.id} className="cursor-pointer transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-950/45" onClick={() => onViewWorkOrder(workOrder)}>
+                                <td className="px-6 py-4 font-semibold text-slate-900 dark:text-white">{workOrder.id}</td>
+                                <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{workOrder.customerName}</td>
+                                <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{workOrder.jobTitle}</td>
+                                <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{new Date(workOrder.promisedDate).toLocaleDateString() || '-'}</td>
+                                <td className="px-6 py-4 text-right font-semibold text-rose-600 dark:text-rose-300">{workOrder.balanceDue.toFixed(2)}</td>
+                                <td className="px-6 py-4 text-center"><StatusBadge status={workOrder.status} /></td>
+                                <td className="px-6 py-4 text-right">
+                                    <ModernButton variant="secondary" onClick={() => onViewWorkOrder(workOrder)} className="px-3 py-2">View</ModernButton>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border dark:divide-dark-border">
-                            {sortedWorkOrders.map(wo => (
-                                <tr key={wo.id} className="hover:bg-muted dark:hover:bg-dark-muted cursor-pointer" onClick={() => onViewWorkOrder(wo)}>
-                                    <td className="px-6 py-4 font-bold text-foreground dark:text-dark-foreground">{wo.id}</td>
-                                    <td className="px-6 py-4">{wo.customerName}</td>
-                                    <td className="px-6 py-4">{wo.jobTitle}</td>
-                                    <td className="px-6 py-4">{new Date(wo.promisedDate).toLocaleDateString() || '-'}</td>
-                                    <td className="px-6 py-4 font-mono text-right font-semibold text-danger">{wo.balanceDue.toFixed(2)}</td>
-                                    <td className="px-6 py-4 text-center"><StatusBadge status={wo.status} /></td>
-                                    <td className="px-6 py-4 text-center">
-                                        <button className="font-medium text-primary dark:text-dark-primary hover:underline">View</button>
-                                    </td>
-                                </tr>
-                            ))}
-                            {sortedWorkOrders.length === 0 && (
-                                <tr><td colSpan={7} className="text-center py-10">No work orders found.</td></tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+                        ))}
+                    </tbody>
+                </table>
+
+                {sortedWorkOrders.length === 0 && (
+                    <div className="p-6">
+                        <ModernEmptyState title="No work orders found." description="Create a work order to start tracking service and repair jobs." />
+                    </div>
+                )}
+            </ModernTableShell>
+        </ModernShell>
     );
 };
 

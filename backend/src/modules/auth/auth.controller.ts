@@ -3,11 +3,11 @@ import {
   Post,
   Body,
   UseGuards,
-  Request,
   HttpCode,
   HttpStatus,
   Get,
   Ip,
+  Param,
   UnauthorizedException,
 } from '@nestjs/common';
 import {
@@ -17,6 +17,7 @@ import {
   ApiBearerAuth,
   ApiBody,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import {
   LoginDto,
@@ -37,6 +38,7 @@ export class AuthController {
 
   @Public()
   @Post('login')
+  @Throttle({ auth: { limit: 10, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with username and password' })
   @ApiBody({ type: LoginDto })
@@ -249,13 +251,32 @@ export class AuthController {
   async revokeCapability(
     @CurrentUser('role') role: string,
     @CurrentUser('id') actorId: string,
-    @Request() req: any,
+    @Param('userId') targetUserId: string,
   ) {
-    const targetUserId: string = req.params.userId;
     if (!['admin', 'manager'].includes(role)) {
       throw new UnauthorizedException('Insufficient permissions');
     }
     await this.authService.revokeCapabilitySnapshot(targetUserId);
     return { message: 'Capability snapshot revoked', userId: targetUserId };
+  }
+
+  @Public()
+  @Post('register-org')
+  @Throttle({ auth: { limit: 10, ttl: 60000 } })
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Register a new organization with primary branch and admin user' })
+  @ApiResponse({ status: 201, description: 'Organization created, returns JWT' })
+  @ApiResponse({ status: 409, description: 'Tax PIN or username already exists' })
+  async registerOrg(@Body() dto: any, @Ip() ipAddress: string) {
+    return this.authService.registerOrg({ ...dto, ipAddress });
+  }
+
+  // Alias: frontend calls /auth/signup
+  @Public()
+  @Post('signup')
+  @Throttle({ auth: { limit: 10, ttl: 60000 } })
+  @HttpCode(HttpStatus.CREATED)
+  async signup(@Body() dto: any, @Ip() ipAddress: string) {
+    return this.authService.registerOrg({ ...dto, ipAddress });
   }
 }

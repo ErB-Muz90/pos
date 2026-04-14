@@ -33,34 +33,40 @@ const DiscountEditor: React.FC<{
     onApply: (discount: CartItem['discount'] | undefined) => void;
     onClose: () => void;
 }> = ({ item, onApply, onClose }) => {
-    const [type, setType] = useState(item.discount?.type || 'fixed');
-    const [value, setValue] = useState(item.discount?.value || '');
+    const [type, setType] = useState<'fixed' | 'percentage'>(item.discount?.type || 'fixed');
+    const [value, setValue] = useState<string>(item.discount?.value?.toString() || '');
 
-    const handleApply = () => {
-        if (Number(value) > 0) {
-            onApply({ type: type as 'fixed' | 'percentage', value: Number(value) });
+    const handleChange = (newValue: string, newType?: 'fixed' | 'percentage') => {
+        const t = newType ?? type;
+        const num = parseFloat(newValue);
+        if (!isNaN(num) && num > 0) {
+            onApply({ type: t, value: num });
         } else {
-            onApply(undefined); // Remove discount if value is 0 or empty
+            onApply(undefined);
         }
-        onClose();
+    };
+
+    const handleTypeChange = (newType: 'fixed' | 'percentage') => {
+        setType(newType);
+        handleChange(value, newType);
     };
 
     return (
         <div className="absolute right-0 top-full mt-1 bg-white/50 dark:bg-dark-border/80 backdrop-blur-md p-2 rounded-lg shadow-xl z-20 w-48 border border-white/20 dark:border-white/10" onClick={e => e.stopPropagation()}>
             <div className="flex bg-muted dark:bg-dark-muted p-0.5 rounded-md mb-2">
-                <button onClick={() => setType('fixed')} className={`w-1/2 text-xs py-1 rounded ${type === 'fixed' ? 'bg-white dark:bg-dark-card font-bold text-primary dark:text-dark-primary' : 'text-foreground-muted'}`}>Fixed</button>
-                <button onClick={() => setType('percentage')} className={`w-1/2 text-xs py-1 rounded ${type === 'percentage' ? 'bg-white dark:bg-dark-card font-bold text-primary dark:text-dark-primary' : 'text-foreground-muted'}`}>%</button>
+                <button onClick={() => handleTypeChange('fixed')} className={`w-1/2 text-xs py-1 rounded ${type === 'fixed' ? 'bg-white dark:bg-dark-card font-bold text-primary dark:text-dark-primary' : 'text-foreground-muted'}`}>Fixed</button>
+                <button onClick={() => handleTypeChange('percentage')} className={`w-1/2 text-xs py-1 rounded ${type === 'percentage' ? 'bg-white dark:bg-dark-card font-bold text-primary dark:text-dark-primary' : 'text-foreground-muted'}`}>%</button>
             </div>
             <input
                 type="number"
                 value={value}
-                onChange={(e) => setValue(e.target.value)}
+                onChange={(e) => { setValue(e.target.value); handleChange(e.target.value); }}
                 className="w-full p-1 border rounded-md text-sm bg-background dark:bg-dark-background border-border dark:border-dark-border"
                 placeholder={type === 'fixed' ? 'e.g. 100' : 'e.g. 10'}
                 autoFocus
-                onKeyDown={(e) => { if (e.key === 'Enter') handleApply(); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') onClose(); }}
             />
-            <button onClick={handleApply} className="w-full mt-2 bg-primary text-primary-content text-xs font-bold py-1.5 rounded">Apply</button>
+            <button onClick={onClose} className="w-full mt-2 bg-primary text-primary-content text-xs font-bold py-1.5 rounded">Done</button>
         </div>
     );
 };
@@ -234,7 +240,7 @@ const Cart = ({
                                         <p className="text-xs text-foreground-muted dark:text-dark-foreground-muted">Ksh {item.price.toFixed(2)} / {item.unitOfMeasure}</p>
                                         {item.discount && (
                                             <p className="text-xs text-accent dark:text-dark-accent font-semibold">
-                                                Discount: -{item.discount.type === 'fixed' ? `Ksh ${item.discount.value.toFixed(2)}` : `${item.discount.value}%`}
+                                                -{item.discount.type === 'fixed' ? `Ksh ${item.discount.value.toFixed(2)}` : `${item.discount.value}%`} off
                                             </p>
                                         )}
                                     </div>
@@ -255,7 +261,21 @@ const Cart = ({
                                             </div>
                                         )}
                                     </div>
-                                    <p className="font-bold w-20 text-right text-foreground dark:text-dark-foreground">Ksh {(item.price * item.quantity).toFixed(2)}</p>
+                                    <div className="w-20 text-right">
+                                        {item.discount ? (
+                                            <>
+                                                <p className="text-xs line-through text-foreground-muted dark:text-dark-foreground-muted">Ksh {(item.price * item.quantity).toFixed(2)}</p>
+                                                <p className="font-bold text-accent dark:text-dark-accent">
+                                                    Ksh {(item.discount.type === 'fixed'
+                                                        ? Math.max(0, item.price * item.quantity - item.discount.value)
+                                                        : item.price * item.quantity * (1 - item.discount.value / 100)
+                                                    ).toFixed(2)}
+                                                </p>
+                                            </>
+                                        ) : (
+                                            <p className="font-bold text-foreground dark:text-dark-foreground">Ksh {(item.price * item.quantity).toFixed(2)}</p>
+                                        )}
+                                    </div>
                                     <div className="flex flex-col items-center justify-center space-y-1">
                                         <div className="relative">
                                             <motion.button whileTap={{ scale: 0.9 }} onClick={() => setEditingDiscountFor(editingDiscountFor === item.id ? null : item.id)} className={`p-1 rounded-full ${item.discount ? 'text-accent dark:text-dark-accent' : 'text-foreground-muted dark:text-dark-foreground-muted hover:text-accent'}`}>

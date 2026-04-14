@@ -8,7 +8,7 @@ export interface JwtPayload {
   sub: string; // User ID
   username: string;
   role: string;
-  organizationId: string;
+  organizationId?: string | null;
   branchId?: string;
   iat?: number;
   exp?: number;
@@ -38,6 +38,8 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
             name: true,
             status: true,
             subscriptionStatus: true,
+            subscriptionExpiresAt: true,
+            deletedAt: true,
           },
         },
         branch: {
@@ -58,15 +60,33 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('User account is not active');
     }
 
-    if (user.organization.status !== 'active') {
-      throw new UnauthorizedException('Organization is not active');
-    }
+    // Super admins are not scoped to any org — skip all org/subscription checks
+    if (user.role !== 'superadmin') {
+      if (!user.organization) {
+        throw new UnauthorizedException('Organization not found');
+      }
 
-    if (
-      user.organization.subscriptionStatus !== 'active' &&
-      user.organization.subscriptionStatus !== 'trial'
-    ) {
-      throw new UnauthorizedException('Subscription expired');
+      if (user.organization.status !== 'active') {
+        throw new UnauthorizedException('Organization is not active');
+      }
+
+      if (user.organization.deletedAt) {
+        throw new UnauthorizedException('Organization is not active');
+      }
+
+      if (
+        user.organization.subscriptionStatus !== 'active' &&
+        user.organization.subscriptionStatus !== 'trial'
+      ) {
+        throw new UnauthorizedException('Subscription expired');
+      }
+
+      if (
+        user.organization.subscriptionExpiresAt &&
+        new Date(user.organization.subscriptionExpiresAt) < new Date()
+      ) {
+        throw new UnauthorizedException('Subscription expired');
+      }
     }
 
     // Check if user is locked
@@ -74,6 +94,15 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException(
         `Account locked until ${user.lockedUntil.toISOString()}`,
       );
+    }
+
+    // Invalidate previously issued access tokens after a password change.
+    // JWT iat is in seconds; passwordChangedAt is a Date.
+    if (payload.iat && user.passwordChangedAt) {
+      const passwordChangedAtSeconds = Math.floor(new Date(user.passwordChangedAt).getTime() / 1000);
+      if (payload.iat < passwordChangedAtSeconds) {
+        throw new UnauthorizedException('Session expired after password change');
+      }
     }
 
     // Return user object that will be attached to request

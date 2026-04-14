@@ -17,6 +17,11 @@
 
 # SPA redirect rules for client-side routing
 [[redirects]]
+  from = "/admin"
+  to = "/admin/index.html"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
@@ -29,6 +34,8 @@
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://apis.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://accounts.google.com https://www.googleapis.com https://api.safaricom.co.ke https://api.banduka.co.ke; frame-src https://accounts.google.com; object-src 'none'; base-uri 'self';"
 
 # Cache static assets
 [[headers]]

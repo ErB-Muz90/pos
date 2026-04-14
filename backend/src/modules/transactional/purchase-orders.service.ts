@@ -20,11 +20,20 @@ export class PurchaseOrdersService {
     return this.prisma.purchaseOrder.create({ data: { ...dto, organizationId, poNumber } });
   }
 
-  async update(id: string, dto: any) {
-    return this.prisma.purchaseOrder.update({ where: { id }, data: dto });
+  async update(id: string, dto: any, organizationId: string) {
+    return this.prisma.purchaseOrder.update({ where: { id, organizationId }, data: dto });
   }
 
-  async remove(id: string) {
-    return this.prisma.purchaseOrder.delete({ where: { id } });
+  async remove(id: string, organizationId: string) {
+    return this.prisma.purchaseOrder.delete({ where: { id, organizationId } });
+  }
+
+  async receive(id: string, organizationId: string, items: Array<{ productId: string; quantity: number; unitCost?: number }>) {
+    const po = await this.prisma.purchaseOrder.findUnique({ where: { id, organizationId } });
+    if (!po) throw new Error('Purchase order not found');
+    return this.prisma.purchaseOrder.update({
+      where: { id },
+      data: { status: 'received', receivedDate: new Date(), items: items as any },
+    });
   }
 }

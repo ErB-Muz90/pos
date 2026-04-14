@@ -76,12 +76,14 @@ export class ShiftsService {
     notes: string,
     userId: string,
     userRole: string,
+    organizationId: string,
     managerOverride?: { managerId: string; reason: string },
   ) {
     const shift = await this.prisma.shift.findUnique({ where: { id: shiftId } });
     if (!shift) throw new BadRequestException('Shift not found');
+    if (shift.organizationId !== organizationId) throw new ForbiddenException('Shift does not belong to your organization');
     if (shift.status !== 'open') throw new BadRequestException('Shift is already closed');
-    if (shift.userId !== userId && !['admin', 'manager'].includes(userRole)) {
+    if (shift.organizationId !== userId && shift.userId !== userId && !['admin', 'manager'].includes(userRole)) {
       throw new ForbiddenException('You can only close your own shift');
     }
 

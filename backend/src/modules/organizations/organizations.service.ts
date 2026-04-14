@@ -1,12 +1,19 @@
 import {
   Injectable,
   NotFoundException,
-  BadRequestException,
   ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
+import * as bcrypt from 'bcrypt';
+
+const PLAN_LIMITS: Record<string, { maxUsers: number; maxBranches: number }> = {
+  starter: { maxUsers: 5, maxBranches: 1 },
+  professional: { maxUsers: 20, maxBranches: 3 },
+  enterprise: { maxUsers: 100, maxBranches: 10 },
+};
 
 @Injectable()
 export class OrganizationsService {
@@ -22,15 +29,136 @@ export class OrganizationsService {
       throw new ConflictException('Organization with this Tax PIN already exists');
     }
 
-    return this.prisma.organization.create({
-      data: {
-        ...createOrganizationDto,
-        subscriptionStatus: 'trial',
-        subscriptionExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days trial
-      },
-      include: {
-        branches: true,
-      },
+    const subscriptionTier = createOrganizationDto.subscriptionTier || 'starter';
+    const limits = this.getPlanLimits(subscriptionTier);
+    const wantsAdminProvisioning =
+      !!createOrganizationDto.branchName ||
+      !!createOrganizationDto.adminUsername ||
+      !!createOrganizationDto.adminEmail ||
+      !!createOrganizationDto.adminPassword ||
+      !!createOrganizationDto.adminFullName;
+
+    if (
+      wantsAdminProvisioning &&
+      (!createOrganizationDto.branchName ||
+        !createOrganizationDto.adminUsername ||
+        !createOrganizationDto.adminEmail ||
+        !createOrganizationDto.adminPassword ||
+        !createOrganizationDto.adminFullName)
+    ) {
+      throw new BadRequestException(
+        'branchName, adminUsername, adminEmail, adminPassword, and adminFullName are all required when provisioning a tenant admin.',
+      );
+    }
+
+    if (createOrganizationDto.adminUsername) {
+      const existingUsername = await this.prisma.user.findUnique({
+        where: { username: createOrganizationDto.adminUsername },
+        select: { id: true },
+      });
+      if (existingUsername) {
+        throw new ConflictException('Admin username already exists');
+      }
+    }
+
+    if (createOrganizationDto.adminEmail) {
+      const existingEmail = await this.prisma.user.findFirst({
+        where: { email: createOrganizationDto.adminEmail },
+        select: { id: true },
+      });
+      if (existingEmail) {
+        throw new ConflictException('Admin email already exists');
+      }
+    }
+
+    if (createOrganizationDto.branchCode) {
+      const existingBranchCode = await this.prisma.branch.findFirst({
+        where: { code: createOrganizationDto.branchCode },
+        select: { id: true },
+      });
+      if (existingBranchCode) {
+        throw new ConflictException('Branch with this code already exists');
+      }
+    }
+
+    const maxBranches = createOrganizationDto.maxBranches ?? limits.maxBranches;
+    const maxUsers = createOrganizationDto.maxUsers ?? limits.maxUsers;
+    const subscriptionStatus =
+      createOrganizationDto.subscriptionStatus ||
+      (createOrganizationDto.subscriptionTier ? 'active' : 'trial');
+    const subscriptionExpiresAt =
+      subscriptionStatus === 'expired'
+        ? new Date()
+        : new Date(
+            Date.now() +
+              (subscriptionStatus === 'trial' ? 30 : 30) * 24 * 60 * 60 * 1000,
+          );
+
+    const baseOrgData = {
+      name: createOrganizationDto.name,
+      businessType: createOrganizationDto.businessType,
+      taxPin: createOrganizationDto.taxPin,
+      physicalAddress: createOrganizationDto.physicalAddress,
+      phone: createOrganizationDto.phone,
+      email: createOrganizationDto.email,
+      etimsEnvironment: createOrganizationDto.etimsEnvironment,
+      etimsBhfId: createOrganizationDto.etimsBhfId,
+      etimsDeviceSerial: createOrganizationDto.etimsDeviceSerial,
+      etimsTin: createOrganizationDto.etimsTin,
+      subscriptionTier,
+      subscriptionStatus,
+      subscriptionExpiresAt,
+      maxBranches,
+      maxUsers,
+      status: createOrganizationDto.status || 'active',
+    };
+
+    if (!wantsAdminProvisioning) {
+      return this.prisma.organization.create({
+        data: baseOrgData,
+        include: {
+          branches: true,
+        },
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(createOrganizationDto.adminPassword!, 10);
+
+    return this.prisma.$transaction(async (tx) => {
+      const org = await tx.organization.create({
+        data: baseOrgData,
+      });
+
+      const branch = await tx.branch.create({
+        data: {
+          organizationId: org.id,
+          name: createOrganizationDto.branchName!,
+          code:
+            createOrganizationDto.branchCode ||
+            `BR-${org.id.slice(0, 6).toUpperCase()}`,
+          isPrimary: true,
+        },
+      });
+
+      await tx.user.create({
+        data: {
+          organizationId: org.id,
+          branchId: branch.id,
+          username: createOrganizationDto.adminUsername!,
+          email: createOrganizationDto.adminEmail!,
+          fullName: createOrganizationDto.adminFullName!,
+          passwordHash,
+          role: 'admin',
+          permissions: {},
+        },
+      });
+
+      return tx.organization.findUniqueOrThrow({
+        where: { id: org.id },
+        include: {
+          branches: true,
+        },
+      });
     });
   }
 
@@ -126,7 +254,7 @@ export class OrganizationsService {
       }
     }
 
-    return this.prisma.organization.update({
+    const updated = await this.prisma.organization.update({
       where: { id },
       data: updateOrganizationDto,
       include: {
@@ -135,17 +263,40 @@ export class OrganizationsService {
         },
       },
     });
+
+    if (updateOrganizationDto.status && updateOrganizationDto.status !== 'active') {
+      await this.invalidateOrganizationSessions(id);
+    }
+
+    return updated;
   }
 
   async remove(id: string) {
     // Verify organization exists
     await this.findOne(id);
 
-    // Soft delete
-    return this.prisma.organization.update({
+    const deletedAt = new Date();
+
+    const organization = await this.prisma.organization.update({
       where: { id },
-      data: { deletedAt: new Date() },
+      data: {
+        status: 'suspended',
+        subscriptionStatus: 'expired',
+        deletedAt,
+      },
     });
+
+    await this.prisma.user.updateMany({
+      where: { organizationId: id, deletedAt: null },
+      data: {
+        status: 'inactive',
+        deletedAt,
+      },
+    });
+
+    await this.invalidateOrganizationSessions(id);
+
+    return organization;
   }
 
   async updateSubscription(
@@ -156,12 +307,16 @@ export class OrganizationsService {
   ) {
     await this.findOne(id);
 
+    const limits = this.getPlanLimits(tier);
+
     return this.prisma.organization.update({
       where: { id },
       data: {
         subscriptionTier: tier,
         subscriptionStatus: status,
         subscriptionExpiresAt: expiresAt,
+        maxUsers: limits.maxUsers,
+        maxBranches: limits.maxBranches,
       },
     });
   }
@@ -234,5 +389,60 @@ export class OrganizationsService {
         },
       },
     };
+  }
+
+  /** Platform-wide metrics for super admin dashboard */
+  async getPlatformDashboard() {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const [
+      totalOrgs,
+      activeOrgs,
+      trialOrgs,
+      expiredOrgs,
+      newOrgsLast30Days,
+      totalUsers,
+      totalSalesLast30Days,
+      revenueByTier,
+    ] = await Promise.all([
+      this.prisma.organization.count({ where: { deletedAt: null } }),
+      this.prisma.organization.count({ where: { deletedAt: null, subscriptionStatus: 'active' } }),
+      this.prisma.organization.count({ where: { deletedAt: null, subscriptionStatus: 'trial' } }),
+      this.prisma.organization.count({ where: { deletedAt: null, subscriptionStatus: 'expired' } }),
+      this.prisma.organization.count({ where: { deletedAt: null, createdAt: { gte: thirtyDaysAgo } } }),
+      this.prisma.user.count({ where: { deletedAt: null, role: { not: 'superadmin' } } }),
+      this.prisma.sale.count({ where: { status: 'completed', createdAt: { gte: thirtyDaysAgo } } }),
+      this.prisma.organization.groupBy({
+        by: ['subscriptionTier'],
+        where: { deletedAt: null },
+        _count: true,
+      }),
+    ]);
+
+    return {
+      orgs: { total: totalOrgs, active: activeOrgs, trial: trialOrgs, expired: expiredOrgs, newLast30Days: newOrgsLast30Days },
+      users: { total: totalUsers },
+      sales: { last30Days: totalSalesLast30Days },
+      byTier: revenueByTier.map((r) => ({ tier: r.subscriptionTier, count: r._count })),
+    };
+  }
+
+  private getPlanLimits(plan: string) {
+    return PLAN_LIMITS[plan] ?? PLAN_LIMITS.starter;
+  }
+
+  private async invalidateOrganizationSessions(organizationId: string) {
+    await this.prisma.userSession.updateMany({
+      where: {
+        isValid: true,
+        user: {
+          organizationId,
+        },
+      },
+      data: {
+        isValid: false,
+        lastActivityAt: new Date(),
+      },
+    });
   }
 }

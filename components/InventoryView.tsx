@@ -1,11 +1,11 @@
-
-
-import React, { useState, useMemo, useRef } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { Product, Permission, Settings, PurchaseOrder, Supplier } from '../types';
+import React, { useMemo, useRef, useState } from 'react';
+import { AnimatePresence } from 'framer-motion';
+import { Permission, Product, PurchaseOrder, Settings, StockMovement, Supplier } from '../types';
 import ProductModal from './inventory/ProductModal';
 import ExportInventoryModal, { ExportableField } from './inventory/ExportInventoryModal';
-import { ICONS } from '../constants';
+import StockAdjustmentModal from './inventory/StockAdjustmentModal';
+import StockMovementHistory from './inventory/StockMovementHistory';
+import { ModernButton, ModernEmptyState, ModernPanel, ModernSearchInput, ModernShell, ModernStatCard, ModernTableShell } from './common/ModernUI';
 
 interface InventoryViewProps {
     products: Product[];
@@ -18,40 +18,58 @@ interface InventoryViewProps {
     onImportProducts: (file: File) => void;
     onPrintBarcodeRequest: (product: Product) => void;
     onAddToPORequest: (product: Product) => void;
+    onStockAdjust: (productId: string, quantity: number, type: string, reason: string) => Promise<void>;
+    stockMovements: StockMovement[];
     settings: Settings;
 }
 
-const StatCard: React.FC<{ title: string; value: string; subtitle: string; icon: React.ReactNode; iconBgColor: string; }> = ({ title, value, subtitle, icon, iconBgColor }) => (
-    <div className="bg-white dark:bg-dark-card p-4 rounded-lg shadow-sm flex items-center space-x-4">
-        <div className={`p-3 rounded-lg ${iconBgColor}`}>
-            {icon}
-        </div>
-        <div>
-            <p className="text-sm text-foreground-muted dark:text-dark-foreground-muted">{title}</p>
-            <p className="text-2xl font-bold text-foreground dark:text-dark-foreground">{value}</p>
-            <p className="text-xs text-foreground-muted dark:text-dark-foreground-muted">{subtitle}</p>
-        </div>
-    </div>
-);
+const icons = {
+    box: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 12 4 7.5" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 12l8-4.5" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 21v-9" /></svg>,
+    alert: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 17h.01" /><path strokeLinecap="round" strokeLinejoin="round" d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" /></svg>,
+    cash: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="6" width="18" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /></svg>,
+    trend: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="m4 14 5-5 4 4 7-7" /><path strokeLinecap="round" strokeLinejoin="round" d="M20 10V6h-4" /></svg>,
+    plus: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14m7-7H5" /></svg>,
+    upload: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 16V4m0 0-4 4m4-4 4 4" /><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1" /></svg>,
+    download: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v12m0 0-4-4m4 4 4-4" /><path strokeLinecap="round" strokeLinejoin="round" d="M4 20h16" /></svg>,
+    barcode: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M5 7v10M9 7v10M15 7v10M19 7v10M12 7v10" /></svg>,
+    history: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 3v5h5" /><path strokeLinecap="round" strokeLinejoin="round" d="M3.05 13A9 9 0 1 0 6 6.3L3 8" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l4 2" /></svg>,
+    edit: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 20h9" /><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" /></svg>,
+    trash: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18" /><path strokeLinecap="round" strokeLinejoin="round" d="M8 6V4h8v2" /><path strokeLinecap="round" strokeLinejoin="round" d="M19 6l-1 14H6L5 6" /><path strokeLinecap="round" strokeLinejoin="round" d="M10 11v6M14 11v6" /></svg>,
+    adjust: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v8M8 12h8" /></svg>,
+};
 
-const InventoryView = ({ products, onAddProduct, onUpdateProduct, onDeleteProductRequest, permissions, onImportProducts, onPrintBarcodeRequest, onAddToPORequest, settings }: InventoryViewProps) => {
+const InventoryView = ({ products, onAddProduct, onUpdateProduct, onDeleteProductRequest, permissions, onImportProducts, onPrintBarcodeRequest, onAddToPORequest, onStockAdjust, stockMovements, settings }: InventoryViewProps) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | undefined>(undefined);
+    const [adjustingProduct, setAdjustingProduct] = useState<Product | undefined>(undefined);
+    const [historyProduct, setHistoryProduct] = useState<Product | undefined>(undefined);
     const importInputRef = useRef<HTMLInputElement>(null);
 
     const canEdit = permissions.includes('edit_inventory');
     const canDelete = permissions.includes('delete_inventory');
 
     const filteredProducts = useMemo(() => {
-        return products.filter(p => {
-            const searchTermLower = searchTerm.toLowerCase();
-            return p.name.toLowerCase().includes(searchTermLower) ||
-            p.inventoryCode.toLowerCase().includes(searchTermLower) ||
-            (p.upc && p.upc.toLowerCase().includes(searchTermLower))
-        }).sort((a,b) => a.name.localeCompare(b.name));
+        return products
+            .filter((product) => {
+                const query = searchTerm.toLowerCase();
+                return (
+                    product.name.toLowerCase().includes(query) ||
+                    product.inventoryCode.toLowerCase().includes(query) ||
+                    (product.upc && product.upc.toLowerCase().includes(query))
+                );
+            })
+            .sort((a, b) => a.name.localeCompare(b.name));
     }, [products, searchTerm]);
+
+    const lowStockThreshold = settings.inventory?.lowStockThreshold ?? 10;
+    const inventoryProducts = useMemo(() => products.filter((product) => product.productType === 'Inventory'), [products]);
+    const lowStockItemsCount = inventoryProducts.filter((product) => product.stock <= lowStockThreshold).length;
+    const totalStockValue = inventoryProducts.reduce((sum, product) => sum + ((product.costPrice || 0) * product.stock), 0);
+    const potentialRetailValue = inventoryProducts.reduce((sum, product) => sum + (product.price * product.stock), 0);
+
+    const formatCurrency = (amount: number) => `${settings.businessInfo.currency} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     const handleNewClick = () => {
         setEditingProduct(undefined);
@@ -62,7 +80,7 @@ const InventoryView = ({ products, onAddProduct, onUpdateProduct, onDeleteProduc
         setEditingProduct(product);
         setIsModalOpen(true);
     };
-    
+
     const handleSaveProduct = async (productData: Product | Omit<Product, 'id' | 'stock' | 'inventoryCode' | 'reservedStock'>) => {
         if ('id' in productData) {
             onUpdateProduct(productData as Product);
@@ -73,34 +91,29 @@ const InventoryView = ({ products, onAddProduct, onUpdateProduct, onDeleteProduc
         setEditingProduct(undefined);
     };
 
-    const handleImportClick = () => {
-        importInputRef.current?.click();
-    };
+    const handleImportClick = () => importInputRef.current?.click();
 
-    const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
+    const handleFileSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
         if (file) {
             onImportProducts(file);
         }
     };
-    
+
     const handleExport = (selectedFields: ExportableField[], format: 'csv' | 'xls') => {
         const headers = selectedFields;
-        const data = products.map(product => {
-            return selectedFields.map(field => {
-                const value = product[field as keyof Product];
-                if (value === undefined || value === null) return '';
-                // Basic CSV escaping for quotes
-                return String(value).replace(/"/g, '""');
-            });
-        });
+        const data = products.map((product) => selectedFields.map((field) => {
+            const value = product[field as keyof Product];
+            if (value === undefined || value === null) return '';
+            return String(value).replace(/"/g, '""');
+        }));
 
         const triggerDownload = (content: string, contentType: string, fileName: string) => {
             const blob = new Blob([content], { type: contentType });
-            const link = document.createElement("a");
+            const link = document.createElement('a');
             const url = URL.createObjectURL(blob);
-            link.setAttribute("href", url);
-            link.setAttribute("download", fileName);
+            link.setAttribute('href', url);
+            link.setAttribute('download', fileName);
             link.style.visibility = 'hidden';
             document.body.appendChild(link);
             link.click();
@@ -109,39 +122,35 @@ const InventoryView = ({ products, onAddProduct, onUpdateProduct, onDeleteProduc
         };
 
         if (format === 'csv') {
-            const csvContent = [
-                headers.join(','),
-                ...data.map(row => row.map(cell => `"${cell}"`).join(','))
-            ].join('\n');
+            const csvContent = [headers.join(','), ...data.map((row) => row.map((cell) => `"${cell}"`).join(','))].join('\n');
             triggerDownload(csvContent, 'text/csv;charset=utf-8;', 'inventory.csv');
-        } else { // xls
+        } else {
             const template = `
                 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
                 <head><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Inventory</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
                 <body><table>
-                    <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
-                    <tbody>${data.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody>
+                    <thead><tr>${headers.map((header) => `<th>${header}</th>`).join('')}</tr></thead>
+                    <tbody>${data.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody>
                 </table></body></html>`;
             triggerDownload(template, 'application/vnd.ms-excel', 'inventory.xls');
         }
         setIsExportModalOpen(false);
     };
-    
-    const lowStockThreshold = settings.inventory?.lowStockThreshold ?? 10;
-    const lowStockItemsCount = products.filter(p => p.productType === 'Inventory' && p.stock <= lowStockThreshold).length;
-    const totalStockValue = products.filter(p => p.productType === 'Inventory').reduce((total, p) => total + ((p.costPrice || 0) * p.stock), 0);
-    const potentialRetailValue = products.filter(p => p.productType === 'Inventory').reduce((total, p) => total + (p.price * p.stock), 0);
-
-    const formatCurrency = (amount: number) => {
-        return `${settings.businessInfo.currency} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    };
-    
-    const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>;
-    const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>;
-
 
     return (
-        <div className="p-4 md:p-6 bg-muted dark:bg-dark-muted min-h-full">
+        <ModernShell
+            eyebrow="Stock Control"
+            title="Inventory"
+            description="Manage products, monitor low-stock risk, and keep adjustments and history within the same cleaner workflow."
+            actions={
+                <>
+                    <input type="file" ref={importInputRef} className="hidden" accept=".csv" onChange={handleFileSelected} />
+                    <ModernButton variant="secondary" onClick={handleImportClick}>{icons.upload}Import</ModernButton>
+                    <ModernButton variant="secondary" onClick={() => setIsExportModalOpen(true)}>{icons.download}Export</ModernButton>
+                    {canEdit ? <ModernButton onClick={handleNewClick}>{icons.plus}Add Product</ModernButton> : null}
+                </>
+            }
+        >
             <AnimatePresence>
                 {isModalOpen && (
                     <ProductModal
@@ -152,122 +161,90 @@ const InventoryView = ({ products, onAddProduct, onUpdateProduct, onDeleteProduc
                         products={products}
                     />
                 )}
-                 {isExportModalOpen && (
-                    <ExportInventoryModal
-                        onClose={() => setIsExportModalOpen(false)}
-                        onExport={handleExport}
-                    />
-                )}
+                {isExportModalOpen && <ExportInventoryModal onClose={() => setIsExportModalOpen(false)} onExport={handleExport} />}
+                {adjustingProduct && <StockAdjustmentModal product={adjustingProduct} onClose={() => setAdjustingProduct(undefined)} onAdjust={onStockAdjust} />}
+                {historyProduct && <StockMovementHistory product={historyProduct} movements={stockMovements.filter((movement) => movement.productId === historyProduct.id)} onClose={() => setHistoryProduct(undefined)} />}
             </AnimatePresence>
-            <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-foreground dark:text-dark-foreground">Inventory Management</h1>
-                    <p className="text-sm text-foreground-muted dark:text-dark-foreground-muted">Manage your products and stock levels</p>
-                </div>
-                 <div className="flex items-center space-x-2">
-                    <input type="file" ref={importInputRef} className="hidden" accept=".csv" onChange={handleFileSelected} />
-                    <motion.button onClick={handleImportClick} whileTap={{ scale: 0.95 }} className="bg-white text-gray-700 font-bold px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 transition-colors shadow-sm flex items-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                        Import
-                    </motion.button>
-                     <motion.button onClick={() => setIsExportModalOpen(true)} whileTap={{ scale: 0.95 }} className="bg-white text-gray-700 font-bold px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 transition-colors shadow-sm flex items-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                        Export
-                    </motion.button>
-                    {canEdit && (
-                        <motion.button 
-                            onClick={handleNewClick}
-                            whileTap={{ scale: 0.95 }}
-                            className="bg-primary text-primary-content font-bold px-4 py-2 rounded-lg hover:bg-primary-focus transition-colors shadow-sm flex items-center"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                            Add Product
-                        </motion.button>
-                    )}
-                </div>
-            </div>
-            
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-                <StatCard title="Total Products" value={String(products.length)} subtitle="Active products" icon={React.cloneElement(ICONS.inventory, {className: "w-6 h-6"})} iconBgColor="bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300" />
-                <StatCard title="Low Stock Items" value={String(lowStockItemsCount)} subtitle="Need reordering" icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>} iconBgColor="bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-300" />
-                <StatCard title="Total Stock Value" value={formatCurrency(totalStockValue)} subtitle="At cost price" icon={React.cloneElement(ICONS.profitReport, {className: "w-6 h-6"})} iconBgColor="bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-300" />
-                <StatCard title="Potential Retail Value" value={formatCurrency(potentialRetailValue)} subtitle="At selling price" icon={React.cloneElement(ICONS.revenue, {className: "w-6 h-6"})} iconBgColor="bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-300" />
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <ModernStatCard title="Total Products" value={products.length} subtitle="Active products and services" icon={icons.box} accent="blue" />
+                <ModernStatCard title="Low Stock Items" value={lowStockItemsCount} subtitle={`At or below threshold of ${lowStockThreshold}`} icon={icons.alert} accent="amber" />
+                <ModernStatCard title="Stock Value" value={formatCurrency(totalStockValue)} subtitle="Inventory value at cost" icon={icons.cash} accent="emerald" />
+                <ModernStatCard title="Retail Potential" value={formatCurrency(potentialRetailValue)} subtitle="Sell-through value at current price" icon={icons.trend} accent="violet" />
             </div>
 
-            <div className="mb-4">
-                 <div className="relative">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-foreground-muted dark:text-dark-foreground-muted absolute top-1/2 left-4 -translate-y-1/2" fill="none" viewBox="0 0 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                    <input
-                        type="text"
-                        placeholder="Search products by name or SKU..."
-                        className="w-full pl-12 pr-4 py-3 rounded-lg border-0 bg-white dark:bg-dark-card focus:outline-none focus:ring-2 focus:ring-primary"
+            <ModernPanel>
+                <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
+                    <ModernSearchInput
                         value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onChange={(event) => setSearchTerm(event.target.value)}
+                        placeholder="Search products by name, SKU, or barcode..."
                     />
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-300">
+                        {filteredProducts.length} match{filteredProducts.length === 1 ? '' : 'es'}
+                    </div>
                 </div>
-            </div>
+            </ModernPanel>
 
-            <div className="bg-white dark:bg-dark-card rounded-lg shadow-sm">
-                 <div className="p-4 border-b border-border dark:border-dark-border">
-                    <h2 className="text-lg font-semibold text-foreground dark:text-dark-foreground">Products</h2>
-                </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left text-foreground-muted dark:text-dark-foreground-muted">
-                        <thead className="text-xs text-foreground dark:text-dark-foreground uppercase bg-muted dark:bg-dark-muted">
-                            <tr>
-                                <th scope="col" className="px-6 py-3">Product</th>
-                                <th scope="col" className="px-6 py-3">SKU</th>
-                                <th scope="col" className="px-6 py-3">Category</th>
-                                <th scope="col" className="px-6 py-3">Price</th>
-                                <th scope="col" className="px-6 py-3">Stock</th>
-                                <th scope="col" className="px-6 py-3">Status</th>
-                                <th scope="col" className="px-6 py-3 text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border dark:divide-dark-border">
-                            {filteredProducts.map(product => (
-                                <tr key={product.id} className="hover:bg-muted dark:hover:bg-dark-muted">
-                                    <td scope="row" className="px-6 py-4 font-semibold text-foreground dark:text-dark-foreground whitespace-nowrap">
-                                        {product.name}
-                                    </td>
-                                    <td className="px-6 py-4 font-mono">{product.inventoryCode}</td>
-                                    <td className="px-6 py-4">{product.category}</td>
-                                    <td className="px-6 py-4 font-mono">{formatCurrency(product.price)}</td>
-                                    <td className="px-6 py-4">
-                                        {product.productType === 'Service' ? (
-                                            <span className="px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-100 dark:text-blue-300 dark:bg-blue-900/40 rounded-full">
-                                                Service
-                                            </span>
-                                        ) : (
-                                            <span className={`px-2.5 py-1 text-xs font-semibold text-white rounded-full ${product.stock <= 0 ? 'bg-danger' : product.stock <= (settings.inventory?.lowStockThreshold ?? 10) ? 'bg-warning' : 'bg-gray-800'}`}>
-                                                {product.stock} {product.unitOfMeasure === 'pc(s)' ? `piece${product.stock === 1 ? '' : 's'}` : product.unitOfMeasure}
-                                            </span>
-                                        )}
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className="px-2.5 py-1 text-xs font-semibold text-white bg-gray-800 rounded-full">
-                                            Active
+            <ModernTableShell title="Product Register" description="Track stock position, movement access, and direct actions from a single table.">
+                <table className="w-full text-sm">
+                    <thead className="bg-slate-50/80 text-left text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:bg-slate-950/60 dark:text-slate-400">
+                        <tr>
+                            <th className="px-6 py-4">Product</th>
+                            <th className="px-6 py-4">SKU</th>
+                            <th className="px-6 py-4">Category</th>
+                            <th className="px-6 py-4">Price</th>
+                            <th className="px-6 py-4">Stock</th>
+                            <th className="px-6 py-4">Status</th>
+                            <th className="px-6 py-4 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200/80 dark:divide-white/10">
+                        {filteredProducts.map((product) => (
+                            <tr key={product.id} className="transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-950/45">
+                                <td className="px-6 py-4">
+                                    <div>
+                                        <p className="font-semibold text-slate-900 dark:text-white">{product.name}</p>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">{product.productType}</p>
+                                    </div>
+                                </td>
+                                <td className="px-6 py-4 font-mono text-xs text-slate-600 dark:text-slate-300">{product.inventoryCode}</td>
+                                <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{product.category}</td>
+                                <td className="px-6 py-4 font-semibold text-slate-900 dark:text-white">{formatCurrency(product.price)}</td>
+                                <td className="px-6 py-4">
+                                    {product.productType === 'Service' ? (
+                                        <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-700 dark:text-blue-300">Service</span>
+                                    ) : (
+                                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${product.stock <= 0 ? 'bg-rose-500/12 text-rose-700 dark:text-rose-300' : product.stock <= lowStockThreshold ? 'bg-amber-500/12 text-amber-700 dark:text-amber-300' : 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300'}`}>
+                                            {product.stock} {product.unitOfMeasure === 'pc(s)' ? `piece${product.stock === 1 ? '' : 's'}` : product.unitOfMeasure}
                                         </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-right space-x-4 whitespace-nowrap">
-                                         {canEdit && <button onClick={() => handleEditClick(product)} className="text-foreground-muted hover:text-primary"><EditIcon /></button>}
-                                         {canDelete && <button onClick={() => onDeleteProductRequest(product)} className="text-foreground-muted hover:text-danger"><DeleteIcon /></button>}
-                                    </td>
-                                </tr>
-                            ))}
-                             {filteredProducts.length === 0 && (
-                                <tr>
-                                    <td colSpan={7} className="text-center py-10">
-                                        <p className="font-semibold">No products found.</p>
-                                        <p className="text-sm">Add a new product to get started.</p>
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+                                    )}
+                                </td>
+                                <td className="px-6 py-4">
+                                    <span className="rounded-full bg-slate-900/6 px-3 py-1 text-xs font-semibold text-slate-700 dark:bg-white/10 dark:text-slate-300">Active</span>
+                                </td>
+                                <td className="px-6 py-4">
+                                    <div className="flex justify-end gap-2">
+                                        {canEdit && product.productType === 'Inventory' ? <ModernButton variant="secondary" onClick={() => setAdjustingProduct(product)} className="px-3 py-2">{icons.adjust}</ModernButton> : null}
+                                        {product.productType === 'Inventory' ? <ModernButton variant="secondary" onClick={() => setHistoryProduct(product)} className="px-3 py-2">{icons.history}</ModernButton> : null}
+                                        {product.productType === 'Inventory' ? <ModernButton variant="secondary" onClick={() => onPrintBarcodeRequest(product)} className="px-3 py-2">{icons.barcode}</ModernButton> : null}
+                                        {canEdit ? <ModernButton variant="secondary" onClick={() => handleEditClick(product)} className="px-3 py-2">{icons.edit}</ModernButton> : null}
+                                        {canEdit && product.productType === 'Inventory' ? <ModernButton variant="secondary" onClick={() => onAddToPORequest(product)} className="px-3 py-2">{icons.plus}</ModernButton> : null}
+                                        {canDelete ? <ModernButton variant="danger" onClick={() => onDeleteProductRequest(product)} className="px-3 py-2">{icons.trash}</ModernButton> : null}
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+
+                {filteredProducts.length === 0 && (
+                    <div className="p-6">
+                        <ModernEmptyState title="No products found." description="Adjust the search or add a new product to populate inventory." />
+                    </div>
+                )}
+            </ModernTableShell>
+        </ModernShell>
     );
 };
 

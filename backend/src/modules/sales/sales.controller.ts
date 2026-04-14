@@ -28,6 +28,7 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('sales')
 @Controller('sales')
@@ -108,8 +109,6 @@ export class SalesController {
   @Post(':id/void')
   @Roles('admin', 'manager')
   @ApiOperation({ summary: 'Void a sale' })
-  @ApiResponse({ status: 200, description: 'Sale voided successfully' })
-  @ApiResponse({ status: 400, description: 'Cannot void this sale' })
   voidSale(
     @Param('id') id: string,
     @Body() voidDto: VoidSaleDto,
@@ -117,6 +116,17 @@ export class SalesController {
     @CurrentUser('role') userRole: string,
   ) {
     return this.salesService.voidSale(id, voidDto, userId, userRole);
+  }
+
+  @Post('return')
+  @Roles('admin', 'manager')
+  @ApiOperation({ summary: 'Process a sales return' })
+  processReturn(
+    @Body() body: { originalSaleId: string; items: Array<{ saleItemId: string; quantity: number }>; reason: string },
+    @CurrentUser('id') userId: string,
+    @CurrentUser('organizationId') organizationId: string,
+  ) {
+    return this.salesService.processReturn(body.originalSaleId, organizationId, body.items, body.reason, userId);
   }
 
   // Receipt endpoints
@@ -149,6 +159,7 @@ export class SalesController {
   // Shifts endpoints
   // Gap 1 — S5: Server time endpoint for clock drift computation
   @Get('shifts/server-time')
+  @Public()
   @ApiOperation({ summary: 'Get server UTC time for clock drift calibration' })
   getServerTime() {
     return { serverTime: new Date().toISOString() };
@@ -176,12 +187,12 @@ export class SalesController {
   @Post('shifts/:id/close')
   @Permissions('sales.create')
   @ApiOperation({ summary: 'Close a shift' })
-  @ApiResponse({ status: 200, description: 'Shift closed successfully' })
   closeShift(
     @Param('id') id: string,
     @Body() closeShiftDto: CloseShiftDto,
     @CurrentUser('id') userId: string,
     @CurrentUser('role') userRole: string,
+    @CurrentUser('organizationId') organizationId: string,
   ) {
     return this.shiftsService.closeShift(
       id,
@@ -189,6 +200,7 @@ export class SalesController {
       closeShiftDto.notes || '',
       userId,
       userRole,
+      organizationId,
       closeShiftDto.managerOverride,
     );
   }

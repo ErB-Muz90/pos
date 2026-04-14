@@ -8,6 +8,7 @@ import PaymentModal from './PaymentModal';
 import { SaleSuccessView } from './SaleSuccessView';
 import EndShiftModal from './EndShiftModal';
 import ZReportView from './ZReportView';
+import { ModernStatCard } from '../common/ModernUI';
 
 interface PosViewProps {
     products: Product[];
@@ -144,6 +145,36 @@ const PosView = ({
 
     const isPosActive = !!activeShift && !isEndingShift && !shiftReportToShow;
 
+    const posStats = useMemo(() => {
+        const cartItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+        const cartValue = cart.reduce((sum, item) => {
+            const lineSubtotal = item.price * item.quantity;
+            if (!item.discount) return sum + lineSubtotal;
+            const discountAmount = item.discount.type === 'percentage'
+                ? lineSubtotal * (item.discount.value / 100)
+                : item.discount.value;
+            return sum + Math.max(0, lineSubtotal - discountAmount);
+        }, 0);
+
+        const todayKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' });
+        const todaySales = sales.filter((sale) => new Date(sale.date).toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' }) === todayKey);
+        const todayRevenue = todaySales.reduce((sum, sale) => sum + sale.total, 0);
+
+        return {
+            cartItems,
+            cartValue,
+            todayRevenue,
+            availableProducts: products.filter((product) => product.productType === 'Inventory' ? product.stock > 0 : true).length,
+        };
+    }, [cart, products, sales]);
+
+    const posIcons = {
+        cart: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="9" cy="20" r="1.5" /><circle cx="18" cy="20" r="1.5" /><path strokeLinecap="round" strokeLinejoin="round" d="M3 4h2l2.4 10.2A2 2 0 0 0 9.35 16H18a2 2 0 0 0 1.94-1.5L22 7H7" /></svg>,
+        cash: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="6" width="18" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /></svg>,
+        shelf: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h10" /></svg>,
+        shift: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 2" /></svg>,
+    };
+
     if (lastSale) {
         return <SaleSuccessView 
             sale={lastSale} 
@@ -180,7 +211,7 @@ const PosView = ({
     };
 
     return (
-        <div className="h-full flex flex-col md:grid md:grid-cols-[1fr_auto] md:overflow-hidden relative">
+        <div className="relative h-full overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,0.10),transparent_28%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.10),transparent_26%)]">
             <AnimatePresence>
                  {isEndingShift && activeShift && (
                     <EndShiftModal
@@ -207,16 +238,46 @@ const PosView = ({
                 )}
             </AnimatePresence>
 
-            {/* Product Grid Area: Main column, now scrolls on all screen sizes */}
-            <div className={`flex-1 p-4 overflow-y-auto transition-opacity duration-300 ${!isPosActive ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
-                <ProductGrid products={products} onAddToCart={addToCart} settings={settings} />
-            </div>
+            <div className="flex h-full flex-col">
+                <div className="border-b border-white/60 bg-white/80 px-4 py-4 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70 md:px-6">
+                    <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                            <div className="mb-2 inline-flex rounded-full bg-violet-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">
+                                Point Of Sale
+                            </div>
+                            <h1 className="text-2xl font-bold tracking-tight text-slate-950 dark:text-white">Checkout Workspace</h1>
+                            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                                {settings.businessInfo.name} • {activeShift ? `Shift active for ${currentUser.name}` : 'Start a shift to begin selling'}
+                            </p>
+                        </div>
+                        <div className={`rounded-2xl px-4 py-3 text-sm font-semibold ${isPosActive ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
+                            {isPosActive ? 'POS Active' : 'Shift Required'}
+                        </div>
+                    </div>
 
-            {/* --- Cart Area --- */}
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        <ModernStatCard title="Cart Items" value={posStats.cartItems} subtitle="Total quantity in current cart" icon={posIcons.cart} accent="violet" />
+                        <ModernStatCard title="Cart Value" value={`${settings.businessInfo.currency} ${posStats.cartValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} subtitle="Current checkout subtotal after line discounts" icon={posIcons.cash} accent="emerald" />
+                        <ModernStatCard title="Today's Revenue" value={`${settings.businessInfo.currency} ${posStats.todayRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} subtitle="Completed sales posted today" icon={posIcons.shift} accent="blue" />
+                        <ModernStatCard title="Sellable Products" value={posStats.availableProducts} subtitle="Items currently available for checkout" icon={posIcons.shelf} accent="amber" />
+                    </div>
+                </div>
 
-            {/* Desktop Cart (visible on medium screens and up) */}
-            <div className={`hidden md:flex md:w-96 bg-card dark:bg-dark-card shadow-lg flex-col min-h-0 transition-opacity duration-300 ${!activeShift ? 'opacity-50' : 'opacity-100'}`}>
-                <Cart {...cartProps} />
+                <div className="flex-1 flex flex-col md:grid md:grid-cols-[1fr_auto] md:overflow-hidden relative">
+                    {/* Product Grid Area: Main column, now scrolls on all screen sizes */}
+                    <div className={`flex-1 p-4 overflow-y-auto transition-opacity duration-300 md:p-6 ${!isPosActive ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
+                        <div className="rounded-[28px] border border-white/60 bg-white/82 p-3 shadow-[0_20px_60px_-40px_rgba(15,23,42,0.45)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/72 md:p-4">
+                            <ProductGrid products={products} onAddToCart={addToCart} settings={settings} />
+                        </div>
+                    </div>
+
+                    {/* --- Cart Area --- */}
+
+                    {/* Desktop Cart (visible on medium screens and up) */}
+                    <div className={`hidden md:flex md:w-96 flex-col min-h-0 border-l border-white/60 bg-white/84 shadow-lg backdrop-blur-xl transition-opacity duration-300 dark:border-white/10 dark:bg-slate-900/74 ${!activeShift ? 'opacity-50' : 'opacity-100'}`}>
+                        <Cart {...cartProps} />
+                    </div>
+                </div>
             </div>
 
             {/* Mobile Cart FAB (visible on small screens) */}

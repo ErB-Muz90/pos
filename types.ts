@@ -292,7 +292,7 @@ export interface WorkOrder {
   status: "Pending" | "InProgress" | "AwaitingParts" | "Ready" | "Completed" | "Closed" | "Cancelled" | "Warranty";
   priority?: "normal" | "urgent" | "scheduled";
   jobType?: "repair" | "service" | "installation" | "maintenance" | "warranty_claim" | "supply";
-  promisedDate?: string;
+  promisedDate?: Date;
   assignedTo?: string;
   labourAmount: number;
   materialsSubtotal: number;
@@ -304,9 +304,9 @@ export interface WorkOrder {
   vatMode: "inclusive" | "exclusive";
   hasVariance?: boolean;       // true if any material has varianceFlag
   varianceResolved?: boolean;  // manager approved/absorbed all variances
-  createdAt: string;
-  updatedAt: string;
-  closedAt?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  closedAt?: Date;
   cashierId: string;
   cashierName: string;
   shiftId: string;
@@ -333,11 +333,11 @@ export interface WorkOrderPayment {
   type: WorkOrderPaymentType;
   method: "cash" | "card" | "mpesa" | "other";
   reference?: string;
-  createdAt: string;
+  createdAt: Date;
   cashierId: string;
   cashierName: string;
   shiftId: string;
-  saleId?: string; // Link to the sale record in POS
+  saleId?: string;
 }
 
 
@@ -404,6 +404,7 @@ export interface User {
   // WARNING: For prototype purposes. In a production, use a secure backend for password handling.
   password?: string;
   role: Role;
+  organizationId?: string;
 }
 
 export interface ToastData {
@@ -419,6 +420,8 @@ export interface AuditLog {
     userName: string;
     action: string;
     details: string;
+    hash: string;      // SHA-256 of (prevHash + timestamp + userId + action + details)
+    prevHash: string;  // hash of the previous log entry ('' for first entry)
 }
 
 export interface Expense {
@@ -600,6 +603,7 @@ export interface Settings {
         minRedeemablePoints: number;
         maxRedemptionPercentage: number;
     };
+    sessionTimeoutMinutes: number;
     measurements: {
         enabled: boolean;
         units: string[];
@@ -642,4 +646,19 @@ export interface Settings {
         defaultWipAccountId: string;
         reportingBasis: 'cash' | 'accrual';
     };
+}
+
+export interface StockMovement {
+    id: string;
+    productId: string;
+    branchId: string;
+    type: 'adjustment' | 'recount' | 'damage' | 'theft' | 'return' | 'purchase' | 'sale' | 'transfer_in' | 'transfer_out';
+    quantity: number;
+    quantityBefore: number;
+    quantityAfter: number;
+    unitCost?: number;
+    userId?: string;
+    reason?: string;
+    referenceNumber?: string;
+    createdAt: Date;
 }

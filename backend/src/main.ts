@@ -2,12 +2,14 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import compression from 'compression';
 import helmet from 'helmet';
+import { join } from 'path';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ['error', 'warn', 'log', 'debug', 'verbose'],
   });
 
@@ -16,11 +18,20 @@ async function bootstrap() {
   // Security
   app.use(helmet());
   app.use(compression());
+  app.useStaticAssets(join(process.cwd(), '..', 'public'));
 
-  // CORS
-  const frontendUrl = configService.get<string>('FRONTEND_URL');
+  // CORS — support comma-separated list of allowed origins
+  const frontendUrl = configService.get<string>('FRONTEND_URL') || 'http://localhost:3006';
+  const allowedOrigins = frontendUrl.split(',').map((o) => o.trim());
   app.enableCors({
-    origin: frontendUrl || 'http://localhost:3006',
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, Postman)
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS: origin ${origin} not allowed`));
+      }
+    },
     credentials: true,
   });
 

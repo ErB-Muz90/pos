@@ -22,19 +22,17 @@ export class QuotationsService {
     return this.prisma.quotation.create({ data: { ...dto, organizationId, quoteNumber } });
   }
 
-  async update(id: string, dto: any) {
-    const quote = await this.prisma.quotation.findUnique({ where: { id } });
+  async update(id: string, dto: any, organizationId: string) {
+    const quote = await this.prisma.quotation.findUnique({ where: { id, organizationId } });
     if (!quote) throw new BadRequestException('Quotation not found');
-    // Lock guard — approved/converted/invoiced quotes cannot be edited
     if (LOCKED_STATUSES.includes(quote.status)) {
       throw new ForbiddenException(`Quotation is ${quote.status} and cannot be edited. Create a new revision.`);
     }
     return this.prisma.quotation.update({ where: { id }, data: dto });
   }
 
-  // Fix 2 — Approve: cloud event, sets lock + approvedBy + approvedAt, checks expiry
-  async approve(id: string, approverId: string) {
-    const quote = await this.prisma.quotation.findUnique({ where: { id } });
+  async approve(id: string, approverId: string, organizationId: string) {
+    const quote = await this.prisma.quotation.findUnique({ where: { id, organizationId } });
     if (!quote) throw new BadRequestException('Quotation not found');
     if (quote.status !== 'Sent' && quote.status !== 'Draft') {
       throw new BadRequestException(`Cannot approve a quotation with status: ${quote.status}`);
@@ -53,9 +51,8 @@ export class QuotationsService {
     });
   }
 
-  // Fix 2 — Reject: records reason
-  async reject(id: string, reason: string) {
-    const quote = await this.prisma.quotation.findUnique({ where: { id } });
+  async reject(id: string, reason: string, organizationId: string) {
+    const quote = await this.prisma.quotation.findUnique({ where: { id, organizationId } });
     if (!quote) throw new BadRequestException('Quotation not found');
     if (LOCKED_STATUSES.includes(quote.status)) {
       throw new ForbiddenException(`Cannot reject a ${quote.status} quotation`);
@@ -66,9 +63,8 @@ export class QuotationsService {
     });
   }
 
-  // Fix 2 — Delete guard: only DRAFT quotes can be deleted
-  async remove(id: string) {
-    const quote = await this.prisma.quotation.findUnique({ where: { id } });
+  async remove(id: string, organizationId: string) {
+    const quote = await this.prisma.quotation.findUnique({ where: { id, organizationId } });
     if (!quote) throw new BadRequestException('Quotation not found');
     if (quote.status !== 'Draft') {
       throw new ForbiddenException(`Only Draft quotations can be deleted. This quotation is ${quote.status}.`);

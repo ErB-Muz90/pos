@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { User, Role } from '../../types';
+import { hashPassword } from '../../utils/crypto';
 
 interface UserModalProps {
     onClose: () => void;
@@ -40,7 +41,7 @@ const UserModal: React.FC<UserModalProps> = ({ onClose, onSave, user }) => {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
 
@@ -74,7 +75,7 @@ const UserModal: React.FC<UserModalProps> = ({ onClose, onSave, user }) => {
         };
 
         if(password) {
-            (userData as User).password = password;
+            (userData as User).password = await hashPassword(password);
         }
 
         if (isEditMode && user) {

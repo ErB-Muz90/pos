@@ -15,6 +15,8 @@ import WelcomeView from './setup/WelcomeView';
 import SignUpView from './SignUpView';
 import { isBackendConfigured, logout as logoutApi } from '../utils/api';
 import { bootstrapSessionFromServer, loginAndBootstrapFromServer } from '../utils/serverSync';
+import { hashPassword } from '../utils/crypto';
+import { setOfflineDbTenant } from '../utils/offlineDb';
 
 
 type AuthState = 'loading' | 'setup' | 'user_selection' | 'pin_entry' | 'staff_login' | 'admin_login' | 'forgot_password' | 'signup' | 'app';
@@ -26,6 +28,7 @@ const AuthView: React.FC = () => {
     const [userForStaffLogin, setUserForStaffLogin] = useState<User | null>(null);
     const [allUsers, setAllUsers] = useState<User[]>([]);
     const [toasts, setToasts] = useState<ToastData[]>([]);
+    const [serverSettings, setServerSettings] = useState<Record<string, any> | null>(null);
 
     const showToast = useCallback((message: string, type: ToastData['type'] = 'info') => {
         const newToast: ToastData = { id: Date.now(), message, type };
@@ -35,6 +38,25 @@ const AuthView: React.FC = () => {
         }, 3000);
     }, []);
 
+    // Global session/subscription event listeners
+    useEffect(() => {
+        const onSessionExpired = () => {
+            setCurrentUser(null);
+            setAuthState('admin_login');
+            showToast('Your session has expired. Please log in again.', 'error');
+        };
+        const onSubscriptionExpired = (e: Event) => {
+            const msg = (e as CustomEvent).detail || 'Your subscription has expired. Please renew to continue.';
+            showToast(msg, 'error');
+        };
+        window.addEventListener('pos:session-expired', onSessionExpired);
+        window.addEventListener('pos:subscription-expired', onSubscriptionExpired);
+        return () => {
+            window.removeEventListener('pos:session-expired', onSessionExpired);
+            window.removeEventListener('pos:subscription-expired', onSubscriptionExpired);
+        };
+    }, [showToast]);
+
     useEffect(() => {
         const checkInitialState = async () => {
             try {
@@ -43,20 +65,28 @@ const AuthView: React.FC = () => {
 
                 if (canUseServer) {
                     try {
-                        const { currentUser: serverUser, users: serverUsers } = await bootstrapSessionFromServer();
+                        const { currentUser: serverUser, users: serverUsers, serverSettings: ss } = await bootstrapSessionFromServer();
+                        if (serverUser.organizationId) setOfflineDbTenant(serverUser.organizationId);
                         setAllUsers(serverUsers);
                         setCurrentUser(serverUser);
+                        if (ss) setServerSettings(ss);
                         setAuthState('app');
                         return;
                     } catch {
-                        // No active backend session yet. Continue with local bootstrap.
+                        // Session expired or missing — if user was previously logged in, go to login not setup
+                        if (localStorage.getItem('banduka_pos_remembered_user')) {
+                            setAuthState('admin_login');
+                            return;
+                        }
                     }
                 }
 
                 let users = await db.getAllItems<User>('users');
 
                 if (users.length === 0) {
-                    setAuthState(canUseServer ? 'admin_login' : 'setup');
+                    // If a user was previously logged in, send to login — not setup wizard
+                    const hasRemembered = localStorage.getItem('banduka_pos_remembered_user');
+                    setAuthState(hasRemembered ? 'admin_login' : (canUseServer ? 'admin_login' : 'setup'));
                     return;
                 }
                 
@@ -96,7 +126,7 @@ const AuthView: React.FC = () => {
                 name: 'Admin',
                 username: setupData.adminEmail,
                 email: setupData.adminEmail,
-                password: setupData.adminPass,
+                password: await hashPassword(setupData.adminPass),
                 role: 'Admin',
             };
             await db.saveItem('users', adminUser);
@@ -130,9 +160,11 @@ const AuthView: React.FC = () => {
     const handleAdminLogin = async (email: string, password: string, rememberMe: boolean): Promise<boolean> => {
         if (isBackendConfigured() && navigator.onLine) {
             try {
-                const { currentUser: serverUser, users: serverUsers } = await loginAndBootstrapFromServer(email, password);
+                const { currentUser: serverUser, users: serverUsers, serverSettings: ss } = await loginAndBootstrapFromServer(email, password);
+                if (serverUser.organizationId) setOfflineDbTenant(serverUser.organizationId);
                 setAllUsers(serverUsers);
                 setCurrentUser(serverUser);
+                if (ss) setServerSettings(ss);
                 setAuthState('app');
                 if (rememberMe) {
                     localStorage.setItem('banduka_pos_remembered_user', serverUser.id);
@@ -146,7 +178,7 @@ const AuthView: React.FC = () => {
         }
 
         const user = allUsers.find(u => u.username && u.username.toLowerCase() === email.toLowerCase());
-        if (user && user.password === password) {
+        if (user && user.password === await hashPassword(password)) {
             setCurrentUser(user);
             setAuthState('app');
             if (rememberMe) {
@@ -207,7 +239,7 @@ const AuthView: React.FC = () => {
     };
 
     const handleStaffLogin = async (username: string, password: string): Promise<boolean> => {
-        if (userForStaffLogin && userForStaffLogin.username.toLowerCase() === username.toLowerCase() && userForStaffLogin.password === password) {
+        if (userForStaffLogin && userForStaffLogin.username.toLowerCase() === username.toLowerCase() && userForStaffLogin.password === await hashPassword(password)) {
             setCurrentUser(userForStaffLogin);
             setAuthState('app');
             localStorage.removeItem('banduka_pos_remembered_user');
@@ -217,14 +249,45 @@ const AuthView: React.FC = () => {
     };
 
 
-    const handleSignUp = async (userData: { businessName: string; email: string; password: string }): Promise<boolean> => {
+    const handleSignUp = async (userData: { businessName: string; location: string; phone: string; email: string; password: string }): Promise<boolean> => {
         try {
+            if (isBackendConfigured() && navigator.onLine) {
+                // Backend path — creates org + branch + admin atomically
+                const { fetchApi, setAuthSession } = await import('../utils/api');
+                const data = await fetchApi('/auth/register-org', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        orgName: userData.businessName,
+                        businessType: 'GeneralRetail',
+                        taxPin: `PIN-${Date.now()}`, // placeholder — user can update in settings
+                        branchName: userData.location || 'Main Branch',
+                        adminUsername: userData.email,
+                        adminEmail: userData.email,
+                        adminPassword: userData.password,
+                        adminFullName: userData.businessName,
+                    }),
+                }) as any;
+                setAuthSession({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+                const { loginAndBootstrapFromServer } = await import('../utils/serverSync');
+                // Bootstrap session — hydrates IndexedDB with server data
+                const { currentUser: serverUser, users: serverUsers, serverSettings: ss } = await loginAndBootstrapFromServer(userData.email, userData.password);
+                if (serverUser.organizationId) setOfflineDbTenant(serverUser.organizationId);
+                setAllUsers(serverUsers);
+                setCurrentUser(serverUser);
+                if (ss) setServerSettings(ss);
+                localStorage.setItem('banduka_pos_remembered_user', serverUser.id);
+                setAuthState('app');
+                showToast(`Welcome to Bandu POS, ${userData.businessName}!`, 'success');
+                return true;
+            }
+
+            // Offline / no backend — local-only path
             const adminUser: User = {
                 id: `user_admin_${Date.now()}`,
                 name: userData.businessName,
                 username: userData.email,
                 email: userData.email,
-                password: userData.password,
+                password: await hashPassword(userData.password),
                 role: 'Admin',
             };
             await db.saveItem('users', adminUser);
@@ -233,7 +296,13 @@ const AuthView: React.FC = () => {
             const newSettings = {
                 ...DEFAULT_SETTINGS,
                 isSetupComplete: true,
-                businessInfo: { ...DEFAULT_SETTINGS.businessInfo, name: userData.businessName, email: userData.email },
+                businessInfo: {
+                    ...DEFAULT_SETTINGS.businessInfo,
+                    name: userData.businessName,
+                    email: userData.email,
+                    address: userData.location,
+                    phone: userData.phone,
+                },
             };
             await db.saveItem('settings', newSettings);
 
@@ -241,11 +310,11 @@ const AuthView: React.FC = () => {
             setCurrentUser(adminUser);
             localStorage.setItem('banduka_pos_remembered_user', adminUser.id);
             setAuthState('app');
-            showToast(`Welcome to Banduka POS, ${userData.businessName}!`, 'success');
+            showToast(`Welcome to Bandu POS, ${userData.businessName}!`, 'success');
             return true;
         } catch (error) {
             console.error('Sign up failed:', error);
-            showToast('Sign up failed. Please try again.', 'error');
+            showToast((error as Error).message || 'Sign up failed. Please try again.', 'error');
             return false;
         }
     };
@@ -254,6 +323,7 @@ const AuthView: React.FC = () => {
         void logoutApi().catch((error) => {
             console.error("Backend logout failed:", error);
         });
+        setOfflineDbTenant('default'); // reset so next login opens the correct org DB
         setCurrentUser(null);
         localStorage.removeItem('banduka_pos_remembered_user');
         setAuthState('user_selection');
@@ -340,6 +410,7 @@ const AuthView: React.FC = () => {
                             onAddUser={handleAddUser}
                             onUpdateUser={handleUpdateUser}
                             onDeleteUser={handleDeleteUser}
+                            serverSettings={serverSettings}
                         />
                     );
                 }

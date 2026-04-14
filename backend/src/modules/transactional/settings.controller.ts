@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -16,8 +16,15 @@ export class SettingsController {
     return this.svc.get(orgId);
   }
 
+  /** Full replace */
   @Post()
   upsert(@CurrentUser('organizationId') orgId: string, @Body() dto: any) {
     return this.svc.upsert(orgId, dto);
+  }
+
+  /** Partial merge — only the keys sent are updated */
+  @Put()
+  patch(@CurrentUser('organizationId') orgId: string, @Body() dto: any) {
+    return this.svc.patch(orgId, dto);
   }
 }

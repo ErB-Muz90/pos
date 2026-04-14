@@ -69,6 +69,7 @@ model Branch {
   organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   users              User[]
   branchInventory    BranchInventory[]
+  inventoryMovements InventoryMovement[]
   sales              Sale[]
   shifts             Shift[]
 
@@ -79,7 +80,7 @@ model Branch {
 // Users
 model User {
   id                    String    @id @default(uuid())
-  organizationId        String
+  organizationId        String?
   branchId              String?
   username              String    @unique
   email                 String?   @unique
@@ -103,7 +104,7 @@ model User {
   updatedAt             DateTime  @updatedAt
   deletedAt             DateTime?
   
-  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization          Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   branch                Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
   sales                 Sale[]
   shifts                Shift[]
@@ -198,6 +199,7 @@ model Product {
   parentProduct     Product?     @relation("ProductVariants", fields: [parentProductId], references: [id], onDelete: Cascade)
   variants          Product[]    @relation("ProductVariants")
   branchInventory   BranchInventory[]
+  inventoryMovements InventoryMovement[]
   saleItems         SaleItem[]
 
   @@index([organizationId])
@@ -227,6 +229,31 @@ model BranchInventory {
   @@index([productId])
   @@index([branchId])
   @@map("branch_inventory")
+}
+
+// Inventory Movement History
+model InventoryMovement {
+  id               String    @id @default(uuid())
+  productId        String
+  branchId         String
+  type             String    // adjustment, damage, theft, recount, return, purchase, sale, transfer_in, transfer_out
+  quantity         Decimal
+  quantityBefore   Decimal
+  quantityAfter    Decimal
+  unitCost         Decimal?
+  userId           String?
+  reason           String?
+  referenceNumber  String?
+  metadata         Json?
+  createdAt        DateTime  @default(now())
+
+  product          Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  branch           Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([branchId])
+  @@index([createdAt])
+  @@map("inventory_movements")
 }
 
 // Customers
@@ -451,6 +478,7 @@ model PurchaseOrder {
   updatedAt      DateTime @updatedAt
 
   invoices       SupplierInvoice[]
+  supplier       Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
   @@map("purchase_orders")
@@ -461,6 +489,7 @@ model SupplierInvoice {
   id              String        @id @default(uuid())
   organizationId  String
   purchaseOrderId String?
+  supplierId      String?
   supplierName    String
   invoiceNumber   String?
   status          String        @default("unpaid")
@@ -560,6 +589,228 @@ model HeldReceipt {
 
   @@index([organizationId])
   @@map("held_receipts")
+}
+
+// Suppliers
+model Supplier {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  businessName   String?
+  contact        String?
+  email          String?
+  phone          String?
+  address        String?
+  creditTerms    String   @default("Net 30")
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  purchaseOrders PurchaseOrder[]
+
+  @@index([organizationId])
+  @@map("suppliers")
+}
+
+// Time Clock Events (Timesheets)
+model TimeClockEvent {
+  id             String    @id @default(uuid())
+  organizationId String
+  userId         String
+  userName       String
+  clockInTime    DateTime
+  clockOutTime   DateTime?
+  status         String    @default("clocked-in")
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([organizationId])
+  @@index([userId])
+  @@map("time_clock_events")
+}
+
+// Subscription Plans (managed by super admin)
+model Plan {
+  id           String   @id @default(uuid())
+  name         String   @unique  // starter, professional, enterprise
+  displayName  String
+  priceLabel   String   @default("Custom")
+  maxUsers     Int      @default(5)
+  maxBranches  Int      @default(1)
+  maxProducts  Int      @default(500)
+  features     Json     @default("[]")  // list of feature keys included
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("plans")
+}
+
+// Feature flags — per-tier or per-org overrides
+model FeatureFlag {
+  id             String   @id @default(uuid())
+  key            String   // e.g. "advanced_reporting", "whatsapp_orders"
+  label          String
+  enabledForTiers String[] @default([])  // e.g. ["professional","enterprise"]
+  orgOverrides   Json     @default("{}")  // { orgId: true/false }
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([key])
+  @@map("feature_flags")
+}
+
+// Immutable super admin audit log
+model SuperAdminAuditLog {
+  id           String   @id @default(uuid())
+  adminId      String
+  adminUsername String
+  action       String   // e.g. "SUSPEND_ORG", "CHANGE_PLAN", "IMPERSONATE"
+  targetType   String?  // "organization", "plan", "feature_flag"
+  targetId     String?
+  details      Json?
+  ipAddress    String?
+  createdAt    DateTime @default(now())
+
+  @@index([adminId])
+  @@index([createdAt])
+  @@map("super_admin_audit_logs")
+}
+
+// Platform settings (key-value store)
+model PlatformSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  @@map("platform_settings")
+}
+
+// Supplier Payments
+model SupplierPayment {
+  id             String   @id @default(uuid())
+  organizationId String
+  supplierId     String?
+  supplierName   String
+  invoiceId      String?
+  amount         Decimal
+  paymentMethod  String   @default("cash")
+  reference      String?
+  paymentDate    DateTime
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@map("supplier_payments")
+}
+
+// Bank Deposits
+model BankDeposit {
+  id             String   @id @default(uuid())
+  organizationId String
+  branchId       String?
+  amount         Decimal
+  bankName       String?
+  accountNumber  String?
+  reference      String?
+  depositDate    DateTime
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@map("bank_deposits")
+}
+
+// Bank Withdrawals
+model BankWithdrawal {
+  id             String   @id @default(uuid())
+  organizationId String
+  branchId       String?
+  amount         Decimal
+  bankName       String?
+  accountNumber  String?
+  reference      String?
+  withdrawalDate DateTime
+  reason         String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@map("bank_withdrawals")
+}
+
+// Stock Movements (manual adjustments, damage, theft, recount)
+model StockMovement {
+  id             String   @id @default(uuid())
+  organizationId String
+  branchId       String?
+  productId      String?
+  productName    String
+  type           String   // adjustment | damage | theft | recount | transfer
+  quantity       Decimal
+  reason         String?
+  reference      String?
+  userId         String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@map("stock_movements")
+}
+
+// Work Order Materials
+model WorkOrderMaterial {
+  id             String   @id @default(uuid())
+  organizationId String
+  workOrderId    String
+  productId      String?
+  productName    String
+  quantity       Decimal
+  unitCost       Decimal  @default(0)
+  totalCost      Decimal  @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([workOrderId])
+  @@map("work_order_materials")
+}
+
+// Chart of Accounts
+model Account {
+  id             String   @id
+  organizationId String?  // null = system default accounts
+  code           String
+  name           String
+  type           String   // Assets | Liabilities | Revenue | Expenses | Contra Revenue
+  isEditable     Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@map("accounts")
+}
+
+// Accounting Transactions (double-entry)
+model AccountingTransaction {
+  id             String   @id @default(uuid())
+  organizationId String
+  accountId      String
+  type           String   // debit | credit
+  amount         Decimal
+  description    String?
+  referenceId    String?
+  referenceType  String?
+  date           DateTime
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([accountId])
+  @@map("accounting_transactions")
 }
 
 // Settings

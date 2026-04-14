@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { TenantResourceGuard, TenantModel } from '../../common/guards/tenant-resource.guard';
 
 @ApiTags('quotations')
 @Controller('quotations')
@@ -28,32 +29,34 @@ export class QuotationsController {
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() dto: any) {
-    return this.svc.update(id, dto);
+  @UseGuards(TenantResourceGuard)
+  @TenantModel('quotation')
+  update(@Param('id') id: string, @Body() dto: any, @CurrentUser('organizationId') orgId: string) {
+    return this.svc.update(id, dto, orgId);
   }
 
-  // Fix 2 — Approve: manager/admin only, cloud event
   @Post(':id/approve')
   @Roles('admin', 'manager')
+  @UseGuards(TenantResourceGuard)
+  @TenantModel('quotation')
   @ApiOperation({ summary: 'Approve a quotation (locks record, records approver)' })
-  approve(
-    @Param('id') id: string,
-    @CurrentUser('id') approverId: string,
-  ) {
-    return this.svc.approve(id, approverId);
+  approve(@Param('id') id: string, @CurrentUser('id') approverId: string, @CurrentUser('organizationId') orgId: string) {
+    return this.svc.approve(id, approverId, orgId);
   }
 
-  // Fix 2 — Reject
   @Post(':id/reject')
   @Roles('admin', 'manager')
+  @UseGuards(TenantResourceGuard)
+  @TenantModel('quotation')
   @ApiOperation({ summary: 'Reject a quotation with a reason' })
-  reject(@Param('id') id: string, @Body('reason') reason: string) {
-    return this.svc.reject(id, reason);
+  reject(@Param('id') id: string, @Body('reason') reason: string, @CurrentUser('organizationId') orgId: string) {
+    return this.svc.reject(id, reason, orgId);
   }
 
-  // Fix 2 — Delete guard: only Draft
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.svc.remove(id);
+  @UseGuards(TenantResourceGuard)
+  @TenantModel('quotation')
+  remove(@Param('id') id: string, @CurrentUser('organizationId') orgId: string) {
+    return this.svc.remove(id, orgId);
   }
 }

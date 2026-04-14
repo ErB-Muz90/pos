@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bandu POS — Super Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 font-sans">
+<div id="app"></div>
+
+<!-- Section templates loaded from partials -->
+<script src="/admin/api.js"></script>
+<script src="/admin/views.js"></script>
+<script>
+// ── State ─────────────────────────────────────────────────────────────────
+const state = {
+  view: 'login',   // login | dashboard | tenants | org | plans | flags | settings | audit | admins
+  token: sessionStorage.getItem('sa_token') || '',
+  theme: sessionStorage.getItem('sa_theme') || 'dark',
+  user: null,
+  loading: false,
+  error: '',
+  globalSearch: '',
+  data: {},        // view-specific data cache
+};
+
+function setState(patch) { Object.assign(state, patch); render(); }
+
+function applyTheme() {
+  const dark = state.theme !== 'light';
+  document.body.className = dark
+    ? 'min-h-screen bg-slate-950 text-slate-100 font-sans'
+    : 'min-h-screen bg-slate-100 text-slate-900 font-sans';
+}
+
+function toggleTheme() {
+  state.theme = state.theme === 'light' ? 'dark' : 'light';
+  sessionStorage.setItem('sa_theme', state.theme);
+  render();
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────
+async function login(username, password) {
+  setState({ loading: true, error: '' });
+  try {
+    const d = await apiPost('/auth/login', { username, password });
+    if (d?.user?.role !== 'superadmin') throw new Error('Not a super admin account');
+    state.token = d.accessToken;
+    state.user = d.user;
+    sessionStorage.setItem('sa_token', d.accessToken);
+    await navigate('dashboard');
+  } catch(e) { setState({ loading: false, error: e.message }); }
+}
+
+function logout() {
+  sessionStorage.removeItem('sa_token');
+  Object.assign(state, { token: '', user: null, view: 'login', data: {} });
+  render();
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────
+async function navigate(view, params = {}) {
+  setState({ loading: true, error: '', view });
+  try {
+    if (view === 'dashboard') state.data.dashboard = await apiGet('/super-admin/dashboard');
+    else if (view === 'tenants') state.data.orgs = await apiGet('/super-admin/orgs?limit=20&page=' + (params.page||1) + (params.search ? '&search='+params.search : '') + (params.status ? '&status='+params.status : '') + (params.tier ? '&tier='+params.tier : ''));
+    else if (view === 'org') { state.data.orgId = params.id; state.data.org = await apiGet('/super-admin/orgs/' + params.id); }
+    else if (view === 'plans') state.data.plans = await apiGet('/super-admin/plans');
+    else if (view === 'flags') state.data.flags = await apiGet('/super-admin/feature-flags');
+    else if (view === 'settings') state.data.settings = await apiGet('/super-admin/settings');
+    else if (view === 'audit') state.data.audit = await apiGet('/super-admin/audit-log?limit=50&page=' + (params.page||1));
+    else if (view === 'admins') state.data.admins = await apiGet('/super-admin/admins');
+  } catch(e) { state.error = e.message; }
+  setState({ loading: false });
+}
+
+// ── Render ────────────────────────────────────────────────────────────────
+function render() {
+  const app = document.getElementById('app');
+  applyTheme();
+  if (!state.token || state.view === 'login') { app.innerHTML = renderLogin(); bindLogin(); return; }
+  app.innerHTML = renderShell(renderView());
+  bindNav();
+  bindViewEvents();
+}
+
+function renderShell(content) {
+  const isLight = state.theme === 'light';
+  const navItems = [
+    { id: 'dashboard', icon: '◫', label: 'Dashboard' },
+    { id: 'tenants', icon: '▣', label: 'Tenants' },
+    { id: 'plans', icon: '◧', label: 'Plans' },
+    { id: 'flags', icon: '⚑', label: 'Feature Flags' },
+    { id: 'settings', icon: '◎', label: 'Platform Settings' },
+    { id: 'audit', icon: '☰', label: 'Audit Log' },
+    { id: 'admins', icon: '◉', label: 'SA Users' },
+  ];
+  return `
+  <div class="flex h-screen overflow-hidden ${isLight ? 'bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.12),_transparent_22%),linear-gradient(180deg,_#fff7ed,_#f8fafc)]' : 'bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.18),_transparent_26%),radial-gradient(circle_at_right,_rgba(16,185,129,0.14),_transparent_22%),linear-gradient(180deg,_#020617,_#0f172a)]'}">
+    <aside class="w-64 border-r ${isLight ? 'border-slate-200 bg-white/85 text-slate-900' : 'border-white/10 bg-slate-950/55 text-white'} backdrop-blur-xl flex flex-col flex-shrink-0">
+      <div class="px-4 py-4 border-b ${isLight ? 'border-slate-200' : 'border-white/10'}">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 bg-gradient-to-br from-orange-500 to-amber-500 rounded-xl flex items-center justify-center text-xs font-bold shadow-lg shadow-orange-500/30">B</div>
+          <div>
+            <div class="font-bold text-sm tracking-wide">Bandu POS</div>
+            <div class="text-[11px] text-orange-300">Super Admin</div>
+          </div>
+        </div>
+      </div>
+      <nav class="flex-1 py-4 space-y-1 px-3">
+        ${navItems.map(n => `
+          <button data-nav="${n.id}" class="w-full text-left px-3 py-2.5 rounded-xl text-sm flex items-center gap-3 transition
+            ${state.view === n.id || (state.view === 'org' && n.id === 'tenants') ? `${isLight ? 'bg-orange-50 text-slate-900 border border-orange-200 shadow-lg shadow-orange-100' : 'bg-gradient-to-r from-orange-500/20 to-amber-500/20 text-white border border-orange-500/30 shadow-lg shadow-orange-500/10'}` : `${isLight ? 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' : 'text-slate-300 hover:bg-white/5 hover:text-white'}`}">
+            <span class="text-orange-300">${n.icon}</span><span>${n.label}</span>
+          </button>`).join('')}
+      </nav>
+      <div class="px-4 py-4 border-t ${isLight ? 'border-slate-200' : 'border-white/10'}">
+        <p class="text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'} mb-1">${state.user?.username || ''}</p>
+        <button id="logoutBtn" class="text-xs text-red-400 hover:text-red-300">Sign out</button>
+      </div>
+    </aside>
+    <main class="flex-1 overflow-y-auto">
+      <header class="sticky top-0 z-20 border-b ${isLight ? 'border-slate-200 bg-white/75' : 'border-white/10 bg-slate-950/40'} backdrop-blur-xl">
+        <div class="px-6 py-4 flex items-center justify-between gap-4">
+          <div class="min-w-0">
+            <p class="text-xs uppercase tracking-[0.24em] text-slate-500">Platform Control</p>
+            <h1 class="text-lg font-semibold ${isLight ? 'text-slate-900' : 'text-white'}">Bandu POS Administration</h1>
+          </div>
+          <div class="hidden md:flex items-center gap-3">
+            <form id="globalSearchForm" class="flex items-center gap-2 rounded-2xl border ${isLight ? 'border-slate-200 bg-white text-slate-500' : 'border-white/10 bg-white/5 text-slate-300'} px-4 py-2 text-sm min-w-[320px]">
+              <span class="text-slate-500">⌕</span>
+              <input
+                id="globalSearchInput"
+                type="text"
+                value="${esc(state.globalSearch || '')}"
+                placeholder="Search tenants by name or PIN..."
+                class="flex-1 bg-transparent outline-none ${isLight ? 'text-slate-700 placeholder:text-slate-400' : 'text-slate-200 placeholder:text-slate-500'}"
+              />
+              <button type="submit" class="rounded-lg ${isLight ? 'bg-slate-100 text-slate-600' : 'bg-white/10 text-slate-300'} px-2 py-0.5 text-[11px]">Search</button>
+            </form>
+            <button id="themeToggleBtn" title="Toggle dark/light mode" class="h-10 w-10 rounded-2xl border ${isLight ? 'border-slate-200 bg-white text-slate-700' : 'border-white/10 bg-white/5 text-slate-300'}">${isLight ? '☀' : '☾'}</button>
+            <div class="flex items-center gap-3 rounded-2xl border ${isLight ? 'border-slate-200 bg-white' : 'border-white/10 bg-white/5'} px-3 py-2">
+              <div class="text-right">
+                <div class="text-sm ${isLight ? 'text-slate-900' : 'text-white'}">${state.user?.username || 'superadmin'}</div>
+                <div class="text-[11px] text-slate-500">Super Administrator</div>
+              </div>
+              <div class="h-9 w-9 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-xs font-bold text-white shadow-lg">SA</div>
+            </div>
+          </div>
+        </div>
+      </header>
+      <div class="max-w-7xl mx-auto px-6 py-6">
+        ${state.loading ? '<div class="text-center py-20 text-slate-400">Loading…</div>' : ''}
+        ${state.error ? `<div class="bg-red-500/10 border border-red-500/30 text-red-200 text-sm rounded-xl px-4 py-3 mb-4">${esc(state.error)}</div>` : ''}
+        ${!state.loading ? content : ''}
+      </div>
+    </main>
+  </div>`;
+}
+
+function renderView() {
+  switch(state.view) {
+    case 'dashboard': return renderDashboard(state.data.dashboard);
+    case 'tenants':   return renderTenants(state.data.orgs);
+    case 'org':       return renderOrgDetail(state.data.org);
+    case 'plans':     return renderPlans(state.data.plans);
+    case 'flags':     return renderFlags(state.data.flags);
+    case 'settings':  return renderSettings(state.data.settings);
+    case 'audit':     return renderAudit(state.data.audit);
+    case 'admins':    return renderAdmins(state.data.admins);
+    default: return '';
+  }
+}
+
+function bindNav() {
+  document.querySelectorAll('[data-nav]').forEach(el =>
+    el.addEventListener('click', () => navigate(el.dataset.nav)));
+  document.getElementById('logoutBtn')?.addEventListener('click', logout);
+  document.getElementById('themeToggleBtn')?.addEventListener('click', toggleTheme);
+  document.getElementById('globalSearchForm')?.addEventListener('submit', event => {
+    event.preventDefault();
+    const query = document.getElementById('globalSearchInput')?.value?.trim() || '';
+    state.globalSearch = query;
+    state.data.orgSearch = query;
+    state.data.orgStatusFilter = '';
+    state.data.orgTierFilter = '';
+    navigate('tenants', { search: query });
+  });
+}
+
+function bindLogin() {
+  document.getElementById('loginForm')?.addEventListener('submit', e => {
+    e.preventDefault();
+    login(document.getElementById('saUser').value, document.getElementById('saPass').value);
+  });
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+applyTheme();
+if (state.token) navigate('dashboard'); else render();
+</script>
+</body>
+</html>

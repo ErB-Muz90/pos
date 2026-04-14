@@ -13,7 +13,7 @@ export class HeldReceiptsService {
     return this.prisma.heldReceipt.create({ data: { ...dto, organizationId } });
   }
 
-  async remove(id: string) {
-    return this.prisma.heldReceipt.delete({ where: { id } });
+  async remove(id: string, organizationId: string) {
+    return this.prisma.heldReceipt.delete({ where: { id, organizationId } });
   }
 }

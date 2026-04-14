@@ -1,7 +1,8 @@
-import React, { useState, useMemo, ReactNode } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { SupplierInvoice, Supplier, SupplierPayment, Shift, Sale, Expense, Settings } from '../types';
+import React, { useMemo, useState } from 'react';
+import { AnimatePresence } from 'framer-motion';
+import { Expense, Sale, Settings, Shift, Supplier, SupplierInvoice, SupplierPayment } from '../types';
 import PaymentModal from './accountsPayable/PaymentModal';
+import { ModernButton, ModernEmptyState, ModernShell, ModernStatCard, ModernTableShell } from './common/ModernUI';
 
 interface AccountsPayableViewProps {
     invoices: SupplierInvoice[];
@@ -15,41 +16,25 @@ interface AccountsPayableViewProps {
     availableFunds: { Cash: number; 'M-Pesa': number; 'Bank Transfer': number };
 }
 
-// Icons for Stat Cards
-const CalendarIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>;
-const ClockIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>;
-const AlertTriangleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>;
-const AlertCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>;
-const CheckCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
-
-
-const StatCard: React.FC<{ title: string; value: string; icon: ReactNode; colorClass?: string }> = ({ title, value, icon, colorClass = 'text-primary dark:text-dark-primary' }) => (
-    <div className="bg-card dark:bg-dark-card p-4 rounded-xl shadow-sm flex items-center space-x-4 border border-border dark:border-dark-border">
-        <div className={`p-3 rounded-lg bg-muted dark:bg-dark-muted ${colorClass}`}>
-            {icon}
-        </div>
-        <div>
-            <p className="text-sm text-foreground-muted dark:text-dark-foreground-muted font-semibold">{title}</p>
-            <p className="text-xl font-bold text-foreground dark:text-dark-foreground">{value}</p>
-        </div>
-    </div>
-);
-
-const StatusBadge = ({ status }: { status: SupplierInvoice['status'] }) => {
-    const baseClasses = "px-2.5 py-1 text-xs font-bold rounded-full";
-    switch (status) {
-        case 'Paid':
-            return <span className={`${baseClasses} bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300`}>Paid</span>;
-        case 'Partially Paid':
-            return <span className={`${baseClasses} bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300`}>Partially Paid</span>;
-        case 'Unpaid':
-            return <span className={`${baseClasses} bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300`}>Unpaid</span>;
-        default:
-            return <span className={`${baseClasses} bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300`}>Unknown</span>;
-    }
+const icons = {
+    current: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="5" width="18" height="16" rx="2" /><path strokeLinecap="round" strokeLinejoin="round" d="M8 3v4M16 3v4M3 10h18" /></svg>,
+    overdue: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 2" /></svg>,
+    alert: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 17h.01" /><path strokeLinecap="round" strokeLinejoin="round" d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" /></svg>,
+    severe: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4M12 16h.01" /></svg>,
+    check: <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m9 12 2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>,
 };
 
-const AccountsPayableView = ({ invoices, suppliers, onRecordPayment, onViewInvoice, activeShift, sales, payouts, settings, availableFunds }: AccountsPayableViewProps) => {
+const StatusBadge = ({ status }: { status: SupplierInvoice['status'] }) => {
+    const styles = {
+        Paid: 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300',
+        'Partially Paid': 'bg-blue-500/12 text-blue-700 dark:text-blue-300',
+        Unpaid: 'bg-amber-500/12 text-amber-700 dark:text-amber-300',
+    } as const;
+
+    return <span className={`rounded-full px-3 py-1 text-xs font-semibold ${styles[status]}`}>{status}</span>;
+};
+
+const AccountsPayableView = ({ invoices, suppliers, onRecordPayment, onViewInvoice, activeShift, settings, availableFunds }: AccountsPayableViewProps) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedInvoice, setSelectedInvoice] = useState<SupplierInvoice | null>(null);
 
@@ -64,23 +49,16 @@ const AccountsPayableView = ({ invoices, suppliers, onRecordPayment, onViewInvoi
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const buckets = {
-            current: 0,
-            due1_30: 0,
-            due31_60: 0,
-            due60_plus: 0,
-        };
+        const buckets = { current: 0, due1_30: 0, due31_60: 0, due60_plus: 0 };
 
-        invoices.forEach(inv => {
-            if (inv.status === 'Paid') return;
-            
-            const amountDue = inv.totalAmount - inv.paidAmount;
-            const dueDate = new Date(inv.dueDate);
+        invoices.forEach((invoice) => {
+            if (invoice.status === 'Paid') return;
+            const amountDue = invoice.totalAmount - invoice.paidAmount;
+            const dueDate = new Date(invoice.dueDate);
             dueDate.setHours(0, 0, 0, 0);
-            
+
             if (dueDate < today) {
-                const diffTime = today.getTime() - dueDate.getTime();
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                const diffDays = Math.ceil((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
                 if (diffDays <= 30) buckets.due1_30 += amountDue;
                 else if (diffDays <= 60) buckets.due31_60 += amountDue;
                 else buckets.due60_plus += amountDue;
@@ -88,12 +66,13 @@ const AccountsPayableView = ({ invoices, suppliers, onRecordPayment, onViewInvoi
                 buckets.current += amountDue;
             }
         });
+
         return buckets;
     }, [invoices]);
 
     const unpaidInvoices = useMemo(() => {
         return invoices
-            .filter(inv => inv.status === 'Unpaid' || inv.status === 'Partially Paid')
+            .filter((invoice) => invoice.status === 'Unpaid' || invoice.status === 'Partially Paid')
             .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
     }, [invoices]);
 
@@ -102,85 +81,86 @@ const AccountsPayableView = ({ invoices, suppliers, onRecordPayment, onViewInvoi
         setIsModalOpen(true);
     };
 
-    const handleSavePayment = (payment: Omit<SupplierPayment, 'id'|'invoiceId' | 'processedById' | 'processedByName' | 'shiftId'>) => {
-        if(selectedInvoice) {
+    const handleSavePayment = (payment: Omit<SupplierPayment, 'id' | 'invoiceId' | 'processedById' | 'processedByName' | 'shiftId'>) => {
+        if (selectedInvoice) {
             onRecordPayment(selectedInvoice.id, payment);
         }
         setIsModalOpen(false);
         setSelectedInvoice(null);
     };
 
-    const formatCurrency = (amount: number) => `Ksh ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const formatCurrency = (amount: number) => `${settings.businessInfo.currency || 'Ksh'} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     return (
-        <div className="p-4 md:p-6 h-full overflow-y-auto bg-background dark:bg-dark-background">
-            <div>
-                <h1 className="text-3xl font-bold text-foreground dark:text-dark-foreground">Accounts Payable</h1>
-                <p className="text-foreground-muted dark:text-dark-foreground-muted mt-1">Manage outstanding invoices and payments to suppliers.</p>
+        <ModernShell
+            eyebrow="Supplier Finance"
+            title="Accounts Payable"
+            description="Review aged payables, inspect open supplier invoices, and record payments without leaving the updated finance workspace."
+        >
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <ModernStatCard title="Current" value={formatCurrency(agingData.current)} subtitle="Invoices not yet overdue" icon={icons.current} accent="emerald" />
+                <ModernStatCard title="Overdue 1-30 Days" value={formatCurrency(agingData.due1_30)} subtitle="Short-term overdue amount" icon={icons.overdue} accent="amber" />
+                <ModernStatCard title="Overdue 31-60 Days" value={formatCurrency(agingData.due31_60)} subtitle="Escalating supplier exposure" icon={icons.alert} accent="rose" />
+                <ModernStatCard title="Overdue 60+ Days" value={formatCurrency(agingData.due60_plus)} subtitle="Critical payable pressure" icon={icons.severe} accent="slate" />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 my-6">
-                <StatCard title="Current" value={formatCurrency(agingData.current)} icon={<CalendarIcon />} colorClass="text-green-500" />
-                <StatCard title="Overdue 1-30 Days" value={formatCurrency(agingData.due1_30)} icon={<ClockIcon />} colorClass="text-yellow-500" />
-                <StatCard title="Overdue 31-60 Days" value={formatCurrency(agingData.due31_60)} icon={<AlertTriangleIcon />} colorClass="text-orange-500" />
-                <StatCard title="Overdue 60+ Days" value={formatCurrency(agingData.due60_plus)} icon={<AlertCircleIcon />} colorClass="text-red-500" />
-            </div>
-
-            <div className="bg-card dark:bg-dark-card rounded-xl shadow-sm border border-border dark:border-dark-border p-6">
-                <h3 className="text-lg font-bold mb-4">Outstanding Supplier Invoices</h3>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead className="text-xs text-foreground-muted dark:text-dark-foreground-muted uppercase">
-                            <tr>
-                                <th className="py-3 px-4">Invoice #</th>
-                                <th className="py-3 px-4">Supplier</th>
-                                <th className="py-3 px-4">Due Date</th>
-                                <th className="py-3 px-4">Total</th>
-                                <th className="py-3 px-4">Amount Due</th>
-                                <th className="py-3 px-4">Status</th>
-                                <th className="py-3 px-4"><span className="sr-only">Actions</span></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {unpaidInvoices.map(invoice => {
-                                const amountDue = invoice.totalAmount - invoice.paidAmount;
-                                return (
-                                    <tr key={invoice.id} onClick={() => onViewInvoice(invoice)} className="border-b border-border dark:border-dark-border last:border-b-0 hover:bg-muted dark:hover:bg-dark-muted cursor-pointer">
-                                        <td className="py-3 px-4 font-bold text-foreground dark:text-dark-foreground">{invoice.invoiceNumber}</td>
-                                        <td className="py-3 px-4 text-foreground dark:text-dark-foreground">{supplierMap[invoice.supplierId] || 'Unknown'}</td>
-                                        <td className="py-3 px-4 text-foreground dark:text-dark-foreground">{new Date(invoice.dueDate).toLocaleDateString('en-GB', {timeZone: 'Africa/Nairobi'})}</td>
-                                        <td className="py-3 px-4 font-mono">{formatCurrency(invoice.totalAmount)}</td>
-                                        <td className="py-3 px-4 font-mono font-bold text-foreground dark:text-dark-foreground">{formatCurrency(amountDue)}</td>
-                                        <td className="py-3 px-4"><StatusBadge status={invoice.status} /></td>
-                                        <td className="py-3 px-4 text-right space-x-2">
-                                            {invoice.status !== 'Paid' && (
-                                                <button 
-                                                    onClick={(e) => { e.stopPropagation(); handleRecordPaymentClick(invoice); }}
-                                                    className="font-medium text-primary dark:text-dark-primary hover:underline"
-                                                >
-                                                    Record Payment
-                                                </button>
-                                            )}
-                                        </td>
-                                    </tr>
-                                )
-                            })}
-                            {unpaidInvoices.length === 0 && (
-                                <tr>
-                                    <td colSpan={7}>
-                                        <div className="text-center py-16 text-foreground-muted dark:text-dark-foreground-muted">
-                                            <CheckCircleIcon />
-                                            <p className="mt-4 font-semibold">All caught up!</p>
-                                            <p>There are no outstanding supplier invoices.</p>
-                                        </div>
+            <ModernTableShell
+                title="Outstanding Supplier Invoices"
+                description="Click a row to inspect invoice detail, or record a payment directly."
+                actions={<span className="text-sm text-slate-500 dark:text-slate-400">{unpaidInvoices.length} open invoice{unpaidInvoices.length === 1 ? '' : 's'}</span>}
+            >
+                <table className="w-full text-sm">
+                    <thead className="bg-slate-50/80 text-left text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:bg-slate-950/60 dark:text-slate-400">
+                        <tr>
+                            <th className="px-6 py-4">Invoice #</th>
+                            <th className="px-6 py-4">Supplier</th>
+                            <th className="px-6 py-4">Due Date</th>
+                            <th className="px-6 py-4">Total</th>
+                            <th className="px-6 py-4">Amount Due</th>
+                            <th className="px-6 py-4">Status</th>
+                            <th className="px-6 py-4 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200/80 dark:divide-white/10">
+                        {unpaidInvoices.map((invoice) => {
+                            const amountDue = invoice.totalAmount - invoice.paidAmount;
+                            return (
+                                <tr key={invoice.id} onClick={() => onViewInvoice(invoice)} className="cursor-pointer transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-950/45">
+                                    <td className="px-6 py-4 font-semibold text-slate-900 dark:text-white">{invoice.invoiceNumber}</td>
+                                    <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{supplierMap[invoice.supplierId] || 'Unknown'}</td>
+                                    <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{new Date(invoice.dueDate).toLocaleDateString('en-GB', { timeZone: 'Africa/Nairobi' })}</td>
+                                    <td className="px-6 py-4 font-semibold text-slate-900 dark:text-white">{formatCurrency(invoice.totalAmount)}</td>
+                                    <td className="px-6 py-4 font-semibold text-slate-900 dark:text-white">{formatCurrency(amountDue)}</td>
+                                    <td className="px-6 py-4"><StatusBadge status={invoice.status} /></td>
+                                    <td className="px-6 py-4 text-right" onClick={(event) => event.stopPropagation()}>
+                                        {invoice.status !== 'Paid' ? (
+                                            <ModernButton variant="secondary" onClick={() => handleRecordPaymentClick(invoice)} className="px-3 py-2">
+                                                Record Payment
+                                            </ModernButton>
+                                        ) : null}
                                     </td>
                                 </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                            );
+                        })}
+                    </tbody>
+                </table>
+
+                {unpaidInvoices.length === 0 && (
+                    <div className="p-10 text-center">
+                        {icons.check}
+                        <div className="mt-4">
+                            <ModernEmptyState title="All caught up." description="There are no outstanding supplier invoices right now." />
+                        </div>
+                    </div>
+                )}
+            </ModernTableShell>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <ModernStatCard title="Cash Available" value={formatCurrency(availableFunds.Cash || 0)} subtitle="Current AP-available cash source" icon={icons.current} accent="emerald" />
+                <ModernStatCard title="M-Pesa Available" value={formatCurrency(availableFunds['M-Pesa'] || 0)} subtitle="Current M-Pesa available funds" icon={icons.overdue} accent="blue" />
+                <ModernStatCard title="Bank Transfer Available" value={formatCurrency(availableFunds['Bank Transfer'] || 0)} subtitle="Funds available for transfer payments" icon={icons.alert} accent="violet" />
             </div>
-            
+
             <AnimatePresence>
                 {isModalOpen && selectedInvoice && (
                     <PaymentModal
@@ -193,7 +173,7 @@ const AccountsPayableView = ({ invoices, suppliers, onRecordPayment, onViewInvoi
                     />
                 )}
             </AnimatePresence>
-        </div>
+        </ModernShell>
     );
 };
 

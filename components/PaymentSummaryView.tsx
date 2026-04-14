@@ -1,6 +1,6 @@
-import React, { useState, useMemo, ReactNode } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useMemo } from 'react';
 import { Sale, User, Payment } from '../types';
+import { ModernButton, ModernEmptyState, ModernInput, ModernShell, ModernStatCard, ModernTableShell } from './common/ModernUI';
 
 type PaymentTransaction = Payment & {
     saleId: string;
@@ -9,22 +9,6 @@ type PaymentTransaction = Payment & {
 };
 
 const ITEMS_PER_PAGE = 20;
-
-const StatCard: React.FC<{ title: string; value: string; onClick: () => void; isActive: boolean; children: ReactNode }> = ({ title, value, onClick, isActive, children }) => (
-    <motion.div 
-        onClick={onClick}
-        className={`p-4 rounded-xl shadow-sm border border-border dark:border-dark-border flex items-center space-x-3 cursor-pointer transition-all duration-200 ${isActive ? 'bg-primary dark:bg-dark-primary text-primary-content dark:text-dark-primary-content' : 'bg-card dark:bg-dark-card hover:bg-muted dark:hover:bg-dark-muted'}`}
-        whileHover={{ y: -3, scale: 1.02 }}
-    >
-        <div className={`p-3 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-primary/10 text-primary dark:bg-dark-primary/20 dark:text-dark-primary'}`}>
-            {children}
-        </div>
-        <div>
-            <p className={`text-sm font-semibold ${isActive ? 'text-white/80 dark:text-dark-primary-content/80' : 'text-foreground-muted dark:text-dark-foreground-muted'}`}>{title}</p>
-            <p className={`text-2xl font-bold ${isActive ? 'text-white dark:text-dark-primary-content' : 'text-foreground dark:text-dark-foreground'}`}>{value}</p>
-        </div>
-    </motion.div>
-);
 
 const exportToCSV = (data: PaymentTransaction[], filename: string) => {
     const headers = ['date', 'saleId', 'method', 'amount', 'cashierName'];
@@ -107,43 +91,33 @@ const PaymentSummaryView: React.FC<{ sales: Sale[]; users: User[] }> = ({ sales 
 
     const formatCurrency = (amount: number = 0) => `Ksh ${amount.toFixed(2)}`;
 
+    const paymentIcons = {
+        All: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="6" width="18" height="12" rx="2" /><circle cx="16" cy="12" r="1.5" /></svg>,
+        Cash: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M12 2v20" /><path strokeLinecap="round" strokeLinejoin="round" d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14.5a3.5 3.5 0 0 1 0 7H6" /></svg>,
+        'M-Pesa': <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="7" y="2" width="10" height="20" rx="2" /><path strokeLinecap="round" strokeLinejoin="round" d="M11 18h2" /></svg>,
+        Card: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="5" width="20" height="14" rx="2" /><path strokeLinecap="round" strokeLinejoin="round" d="M2 10h20" /></svg>,
+        Points: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="m12 3 2.4 4.86L20 8.7l-4 3.9.94 5.48L12 15.9l-4.94 2.18L8 12.6l-4-3.9 5.6-.84L12 3Z" /></svg>,
+    };
+
     return (
-        <div className="p-4 md:p-8 h-full overflow-y-auto">
-            <h1 className="text-4xl font-bold text-foreground dark:text-dark-foreground">Payment Summary</h1>
-            
-            <div className="my-6 p-4 bg-card dark:bg-dark-card rounded-xl shadow-sm border border-border dark:border-dark-border grid grid-cols-1 md:grid-cols-3 gap-4">
-                <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-border dark:border-dark-border bg-card dark:bg-dark-background" />
-                <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-border dark:border-dark-border bg-card dark:bg-dark-background" />
-                <button 
-                    onClick={() => exportToCSV(filteredTransactions, `payment_summary_${dateFrom}_${dateTo}.csv`)}
-                    className="bg-foreground/80 dark:bg-dark-border text-white font-bold px-4 py-2 rounded-lg hover:bg-foreground dark:hover:bg-dark-border/80 transition-colors shadow-md flex items-center justify-center text-sm"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                    Export to CSV
-                </button>
+        <ModernShell eyebrow="Collections Analytics" title="Payment Summary" description="Review payment mix, filter by method and period, and export transaction-level payment summaries.">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <ModernInput type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+                <ModernInput type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+                <ModernButton onClick={() => exportToCSV(filteredTransactions, `payment_summary_${dateFrom}_${dateTo}.csv`)}>Export to CSV</ModernButton>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-                <StatCard title="Total Payments" value={formatCurrency(summary.All)} onClick={() => setFilter('All')} isActive={filter === 'All'}>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                </StatCard>
-                <StatCard title="Cash" value={formatCurrency(summary.Cash)} onClick={() => setFilter('Cash')} isActive={filter === 'Cash'}>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.121 15.536c-1.171 1.952-3.07 1.952-4.242 0-1.172-1.953-1.172-5.119 0-7.072 1.171-1.952 3.07-1.952 4.242 0 1.172 1.953 1.172 5.119 0 7.072z" /></svg>
-                </StatCard>
-                <StatCard title="M-Pesa" value={formatCurrency(summary['M-Pesa'])} onClick={() => setFilter('M-Pesa')} isActive={filter === 'M-Pesa'}>
-                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-                </StatCard>
-                <StatCard title="Card" value={formatCurrency(summary.Card)} onClick={() => setFilter('Card')} isActive={filter === 'Card'}>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
-                </StatCard>
-                 <StatCard title="Points" value={formatCurrency(summary.Points)} onClick={() => setFilter('Points')} isActive={filter === 'Points'}>
-                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
-                </StatCard>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+                <div onClick={() => setFilter('All')} className="cursor-pointer"><ModernStatCard title="Total Payments" value={formatCurrency(summary.All)} subtitle="All recorded payment methods" icon={paymentIcons.All} accent={filter === 'All' ? 'violet' : 'slate'} /></div>
+                <div onClick={() => setFilter('Cash')} className="cursor-pointer"><ModernStatCard title="Cash" value={formatCurrency(summary.Cash)} subtitle="Cash receipts collected" icon={paymentIcons.Cash} accent={filter === 'Cash' ? 'emerald' : 'slate'} /></div>
+                <div onClick={() => setFilter('M-Pesa')} className="cursor-pointer"><ModernStatCard title="M-Pesa" value={formatCurrency(summary['M-Pesa'])} subtitle="Mobile money collections" icon={paymentIcons['M-Pesa']} accent={filter === 'M-Pesa' ? 'blue' : 'slate'} /></div>
+                <div onClick={() => setFilter('Card')} className="cursor-pointer"><ModernStatCard title="Card" value={formatCurrency(summary.Card)} subtitle="Card payment volume" icon={paymentIcons.Card} accent={filter === 'Card' ? 'amber' : 'slate'} /></div>
+                <div onClick={() => setFilter('Points')} className="cursor-pointer"><ModernStatCard title="Points" value={formatCurrency(summary.Points)} subtitle="Loyalty points redemption value" icon={paymentIcons.Points} accent={filter === 'Points' ? 'rose' : 'slate'} /></div>
             </div>
-            
-            <div className="bg-card dark:bg-dark-card rounded-xl shadow-sm border border-border dark:border-dark-border overflow-x-auto">
+
+            <ModernTableShell title="Payment Transactions" description="Transaction-level payment breakdown for the selected filters.">
                 <table className="w-full text-sm text-left text-foreground-muted dark:text-dark-foreground-muted">
-                    <thead className="text-xs text-foreground dark:text-dark-foreground uppercase bg-muted dark:bg-dark-muted font-bold">
+                    <thead className="bg-slate-50/80 text-left text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:bg-slate-950/60 dark:text-slate-400">
                         <tr>
                             <th scope="col" className="px-6 py-3">Date</th>
                             <th scope="col" className="px-6 py-3">Receipt ID</th>
@@ -169,14 +143,13 @@ const PaymentSummaryView: React.FC<{ sales: Sale[]; users: User[] }> = ({ sales 
                 </table>
                  {totalPages > 1 && (
                     <div className="flex justify-between items-center p-4 text-sm border-t border-border dark:border-dark-border">
-                        <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 border rounded-md disabled:opacity-50 dark:border-dark-border">Previous</button>
+                        <ModernButton variant="secondary" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Previous</ModernButton>
                         <span>Page {currentPage} of {totalPages}</span>
-                        <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1 border rounded-md disabled:opacity-50 dark:border-dark-border">Next</button>
+                        <ModernButton variant="secondary" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</ModernButton>
                     </div>
                 )}
-            </div>
-
-        </div>
+            </ModernTableShell>
+        </ModernShell>
     );
 };
 

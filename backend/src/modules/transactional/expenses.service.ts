@@ -19,10 +19,10 @@ export class ExpensesService {
   }
 
   async update(id: string, organizationId: string, dto: any) {
-    return this.prisma.expense.update({ where: { id }, data: dto });
+    return this.prisma.expense.update({ where: { id, organizationId }, data: dto });
   }
 
-  async remove(id: string) {
-    return this.prisma.expense.delete({ where: { id } });
+  async remove(id: string, organizationId: string) {
+    return this.prisma.expense.delete({ where: { id, organizationId } });
   }
 }

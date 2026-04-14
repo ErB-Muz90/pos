@@ -303,7 +303,16 @@ export class SalesService {
       return existingSale;
     }
 
-    // 2. Validate stock availability
+    // 2. Validate branchId belongs to this organization
+    const branch = await this.prisma.branch.findFirst({
+      where: { id: dto.branchId, organizationId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!branch) {
+      throw new BadRequestException('Branch not found or does not belong to your organization');
+    }
+
+    // 3. Validate stock availability
     await this.validateStockAvailability(dto.items, dto.branchId);
 
     // 3. Calculate totals
@@ -396,6 +405,17 @@ export class SalesService {
             where: { transactionReference: mpesaRef, paymentMethod: 'mpesa' },
           });
           if (dupPayment) {
+            // Write conflict record for manager review
+            await (this.prisma as any).mpesaConflict.create({
+              data: {
+                id: require('crypto').randomUUID(),
+                organizationId,
+                mpesaRef,
+                saleId1: dupPayment.saleId ?? '',
+                saleId2: createdSale.id,
+                status: 'CONFLICT_PENDING',
+              },
+            });
             throw new ConflictException({
               code: 'MPESA_DUPLICATE_REF',
               message: `M-Pesa ref ${mpesaRef} already exists. Flagged for manager review.`,
@@ -724,5 +744,59 @@ export class SalesService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  async processReturn(originalSaleId: string, organizationId: string, items: Array<{ saleItemId: string; quantity: number }>, reason: string, userId: string) {
+    const original = await this.prisma.sale.findFirst({
+      where: { id: originalSaleId, organizationId },
+      include: { saleItems: true },
+    });
+    if (!original) throw new BadRequestException('Original sale not found');
+
+    const returnAmount = items.reduce((sum, ri) => {
+      const item = original.saleItems.find(si => si.id === ri.saleItemId);
+      return sum + (item ? Number(item.unitPrice) * ri.quantity : 0);
+    }, 0);
+
+    return this.prisma.$transaction(async (tx) => {
+      // Restore inventory for returned items
+      for (const ri of items) {
+        const item = original.saleItems.find(si => si.id === ri.saleItemId);
+        if (item?.productId) {
+          await tx.branchInventory.updateMany({
+            where: { productId: item.productId, branchId: original.branchId },
+            data: { quantity: { increment: ri.quantity } },
+          });
+        }
+      }
+      // Record return as a negative-amount sale
+      const returnSale = await tx.sale.create({
+        data: {
+          organizationId,
+          branchId: original.branchId,
+          saleNumber: `RET-${original.saleNumber}`,
+          saleDate: new Date(),
+          subtotal: -returnAmount,
+          taxAmount: 0,
+          totalAmount: -returnAmount,
+          amountPaid: -returnAmount,
+          changeAmount: 0,
+          status: 'completed',
+          saleType: 'return',
+          userId,
+          notes: `Return for ${original.saleNumber}: ${reason}`,
+        },
+      });
+      await this.ledger.createEntry({
+        organizationId,
+        branchId: original.branchId,
+        saleId: returnSale.id,
+        type: 'SALE_RETURN',
+        amount: -returnAmount,
+        description: `Return for ${original.saleNumber}`,
+        createdBy: userId,
+      });
+      return returnSale;
+    });
   }
 }

@@ -9,6 +9,7 @@ interface InventorySettingsProps {
 
 const InventorySettings: React.FC<InventorySettingsProps> = ({ settings, onUpdateSettings }) => {
     const [lowStockThreshold, setLowStockThreshold] = useState(settings.inventory?.lowStockThreshold ?? 3);
+    const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState(settings.sessionTimeoutMinutes ?? 30);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -16,7 +17,8 @@ const InventorySettings: React.FC<InventorySettingsProps> = ({ settings, onUpdat
             inventory: {
                 ...settings.inventory,
                 lowStockThreshold: Number(lowStockThreshold)
-            }
+            },
+            sessionTimeoutMinutes: Number(sessionTimeoutMinutes),
         });
     };
 
@@ -35,6 +37,22 @@ const InventorySettings: React.FC<InventorySettingsProps> = ({ settings, onUpdat
                 />
                 <p className="mt-2 text-xs text-foreground-muted dark:text-dark-foreground-muted">
                     Products with stock quantity less than this number will be flagged as "Low Stock".
+                </p>
+            </div>
+
+            <div className="pt-4 border-t border-border dark:border-dark-border">
+                <label htmlFor="sessionTimeout" className="block text-sm font-medium text-foreground dark:text-dark-foreground">Session Timeout (minutes)</label>
+                <input
+                    type="number"
+                    id="sessionTimeout"
+                    value={sessionTimeoutMinutes}
+                    onChange={(e) => setSessionTimeoutMinutes(Number(e.target.value))}
+                    min="1"
+                    max="480"
+                    className="mt-1 block w-full max-w-xs px-3 py-2 bg-card dark:bg-dark-card border border-border dark:border-dark-border rounded-md shadow-sm focus:outline-none focus:ring-primary dark:focus:ring-dark-primary sm:text-sm"
+                />
+                <p className="mt-2 text-xs text-foreground-muted dark:text-dark-foreground-muted">
+                    Auto-lock the screen after this many minutes of inactivity. Requires a user PIN to be set. Default: 30 minutes.
                 </p>
             </div>
 

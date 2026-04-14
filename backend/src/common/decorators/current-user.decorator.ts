@@ -6,14 +6,16 @@ export interface CurrentUserData {
   email?: string;
   fullName: string;
   role: string;
-  organizationId: string;
+  organizationId?: string | null;
   branchId?: string;
   permissions: Record<string, any>;
-  organization: {
+  organization?: {
     id: string;
     name: string;
     status: string;
     subscriptionStatus: string;
+    subscriptionExpiresAt?: string | Date | null;
+    deletedAt?: string | Date | null;
   };
   branch?: {
     id: string;

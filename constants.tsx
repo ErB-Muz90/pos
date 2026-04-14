@@ -109,6 +109,7 @@ export const DEFAULT_SETTINGS: Settings = {
         minRedeemablePoints: 100,
         maxRedemptionPercentage: 50,
     },
+    sessionTimeoutMinutes: 30,
     measurements: {
         enabled: false,
         units: ['pc(s)', 'in', 'cm', 'm', 'kg', 'g', 'sq ft', 'ltr', 'hr'],

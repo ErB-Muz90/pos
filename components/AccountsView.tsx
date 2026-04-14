@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Sale, Expense, AccountingTransaction, Account, Settings, SupplierPayment, Supplier, Shift, User, Customer, BankDeposit, BankWithdrawal, SupplierInvoice } from '../types';
 import BankDepositModal from './BankDepositModal';
 import RecordTransactionModal from './accounts/RecordTransactionModal';
+import { ModernButton, ModernShell, ModernStatCard } from './common/ModernUI';
 
 interface AccountsViewProps {
     sales: Sale[];
@@ -34,19 +35,6 @@ const DownArrowCircle = () => <svg xmlns="http://www.w3.org/2000/svg" width="20"
 const formatCurrency = (amount: number, currency: string = 'KES') => {
     return `${currency} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
-
-const StatCard: React.FC<{ title: string, value: string, icon: React.ReactNode, isWarning?: boolean }> = ({ title, value, icon, isWarning }) => (
-    <div className={`bg-card dark:bg-dark-card p-4 rounded-xl shadow-sm flex items-center space-x-4 border ${isWarning ? 'border-red-300 dark:border-red-500/50' : 'border-border dark:border-dark-border'}`}>
-        <div className={`p-3 rounded-lg ${isWarning ? 'text-red-500 bg-red-100 dark:bg-red-900/50' : 'text-primary dark:text-dark-primary bg-muted dark:bg-dark-muted'}`}>
-            {icon}
-        </div>
-        <div>
-            <p className="text-sm text-foreground-muted dark:text-dark-foreground-muted font-semibold">{title}</p>
-            <p className="text-xl font-bold text-foreground dark:text-dark-foreground">{value}</p>
-            {isWarning && <p className="text-xs text-red-500 font-semibold">Insufficient balance</p>}
-        </div>
-    </div>
-);
 
 type DisplayTransaction = {
     date: Date;
@@ -83,15 +71,17 @@ const AccountsView: React.FC<AccountsViewProps> = ({ sales, expenses, accounting
         return activeShiftFloat + cashIn - changeGiven - cashOut;
     }, [activeShift, sales, expenses, supplierPayments, bankDeposits, activeShiftFloat]);
 
-    // M-Pesa = all M-Pesa sales minus M-Pesa expenses and M-Pesa bank deposits
+    // M-Pesa = all M-Pesa sales minus M-Pesa expenses, M-Pesa bank deposits, and M-Pesa supplier payments
     const mpesaIn = sales.reduce((sum, s) => sum + s.payments.filter(p => p.method === 'M-Pesa').reduce((a, p) => a + p.amount, 0), 0);
     const mpesaOut = expenses.filter(e => e.source === 'M-Pesa').reduce((sum, e) => sum + e.amount, 0)
-        + bankDeposits.reduce((sum, d) => sum + d.breakdown.mpesa, 0);
+        + bankDeposits.reduce((sum, d) => sum + d.breakdown.mpesa, 0)
+        + supplierPayments.filter(p => p.method === 'M-Pesa').reduce((sum, p) => sum + p.amount, 0);
     const mpesaBalance = mpesaIn - mpesaOut;
 
-    // Bank balance = total deposited minus total withdrawn
+    // Bank balance = total deposited minus total withdrawn minus bank transfer supplier payments
     const bankBalance = bankDeposits.reduce((sum, d) => sum + d.amount, 0)
-        - bankWithdrawals.reduce((sum, w) => sum + w.amount, 0);
+        - bankWithdrawals.reduce((sum, w) => sum + w.amount, 0)
+        - supplierPayments.filter(p => p.method === 'Bank Transfer').reduce((sum, p) => sum + p.amount, 0);
     const totalBalance = cashInHand + mpesaBalance + bankBalance;
 
     const allTransactions = useMemo((): DisplayTransaction[] => {
@@ -168,7 +158,7 @@ const AccountsView: React.FC<AccountsViewProps> = ({ sales, expenses, accounting
     };
 
     return (
-        <div className="p-4 md:p-6 h-full overflow-y-auto bg-background dark:bg-dark-background text-foreground dark:text-dark-foreground">
+        <ModernShell eyebrow="Finance Control" title="Accounts & Finance" description="Track balances, deposits, withdrawals, and transaction flow across cash, M-Pesa, and bank sources.">
             {isDepositModalOpen && (
                 <BankDepositModal 
                     onClose={() => setIsDepositModalOpen(false)}
@@ -219,36 +209,16 @@ const AccountsView: React.FC<AccountsViewProps> = ({ sales, expenses, accounting
                     </div>
                 </div>
             )}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-                <div>
-                    <h1 className="text-3xl font-bold">Accounts & Finance</h1>
-                    <p className="text-foreground-muted dark:text-dark-foreground-muted mt-1">Track all payments, balances, and bank deposits</p>
-                </div>
-                <div className="flex items-center space-x-2 mt-4 md:mt-0">
-                    <button onClick={() => setIsDepositModalOpen(true)} className="bg-green-600 text-white font-bold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-green-700 transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14m-7-7h14" /></svg>
-                        <span>Bank Deposit</span>
-                    </button>
-                    <button onClick={() => setIsRecordTxModalOpen(true)} className="bg-orange-500 text-white font-bold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-orange-600 transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14m-7-7h14" /></svg>
-                        <span>Record Transaction</span>
-                    </button>
-                </div>
+            <div className="flex flex-wrap items-center gap-2">
+                <ModernButton onClick={() => setIsDepositModalOpen(true)}>Bank Deposit</ModernButton>
+                <ModernButton variant="secondary" onClick={() => setIsRecordTxModalOpen(true)}>Record Transaction</ModernButton>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-                <StatCard title="Cash on Hand" value={formatCurrency(cashInHand, settings.businessInfo.currency)} icon={<CashIcon />} isWarning={cashInHand < 0} />
-                <StatCard title="M-Pesa Balance" value={formatCurrency(mpesaBalance, settings.businessInfo.currency)} icon={<MpesaIcon />} isWarning={mpesaBalance < 0} />
-                <StatCard title="Bank Balance" value={formatCurrency(bankBalance, settings.businessInfo.currency)} icon={<BankIcon />} isWarning={bankBalance < 0} />
-                <div className="bg-card dark:bg-dark-card p-4 rounded-xl shadow-sm flex items-center space-x-4 border border-border dark:border-dark-border">
-                    <div className="p-3 rounded-lg text-purple-500 bg-purple-100 dark:bg-purple-900/50">
-                        <TotalIcon />
-                    </div>
-                    <div>
-                        <p className="text-sm text-foreground-muted dark:text-dark-foreground-muted font-semibold">Total Balance</p>
-                        <p className="text-xl font-bold text-foreground dark:text-dark-foreground">{formatCurrency(totalBalance, settings.businessInfo.currency)}</p>
-                    </div>
-                </div>
+                <ModernStatCard title="Cash on Hand" value={formatCurrency(cashInHand, settings.businessInfo.currency)} subtitle={cashInHand < 0 ? 'Insufficient balance' : 'Drawer-adjusted cash balance'} icon={<CashIcon />} accent={cashInHand < 0 ? 'rose' : 'emerald'} />
+                <ModernStatCard title="M-Pesa Balance" value={formatCurrency(mpesaBalance, settings.businessInfo.currency)} subtitle={mpesaBalance < 0 ? 'Insufficient balance' : 'Net mobile money balance'} icon={<MpesaIcon />} accent={mpesaBalance < 0 ? 'rose' : 'blue'} />
+                <ModernStatCard title="Bank Balance" value={formatCurrency(bankBalance, settings.businessInfo.currency)} subtitle={bankBalance < 0 ? 'Insufficient balance' : 'Deposits less withdrawals'} icon={<BankIcon />} accent={bankBalance < 0 ? 'rose' : 'amber'} />
+                <ModernStatCard title="Total Balance" value={formatCurrency(totalBalance, settings.businessInfo.currency)} subtitle="Combined finance position" icon={<TotalIcon />} accent="violet" />
             </div>
 
             <div className="bg-card dark:bg-dark-card rounded-xl shadow-sm border border-border dark:border-dark-border p-6">
@@ -262,10 +232,7 @@ const AccountsView: React.FC<AccountsViewProps> = ({ sales, expenses, accounting
                     <>
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-bold">Bank Account Ledger</h3>
-                            <button onClick={() => setIsWithdrawModalOpen(true)} className="bg-red-600 text-white font-bold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-red-700 transition-colors text-sm">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
-                                <span>Withdraw</span>
-                            </button>
+                            <ModernButton variant="danger" onClick={() => setIsWithdrawModalOpen(true)}>Withdraw</ModernButton>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
@@ -348,7 +315,7 @@ const AccountsView: React.FC<AccountsViewProps> = ({ sales, expenses, accounting
                     </>
                 )}
             </div>
-        </div>
+        </ModernShell>
     );
 };
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User } from '../types';
+import { hashPassword } from '../utils/crypto';
 
 interface ForgotPasswordViewProps {
     onFindUser: (email: string) => Promise<User | null>;
@@ -58,7 +59,7 @@ const ForgotPasswordView: React.FC<ForgotPasswordViewProps> = ({ onFindUser, onR
         }
     };
     
-    const handleResetSubmit = (e: React.FormEvent) => {
+    const handleResetSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         if (password.length < 6) {
@@ -70,7 +71,7 @@ const ForgotPasswordView: React.FC<ForgotPasswordViewProps> = ({ onFindUser, onR
             return;
         }
         if (userToReset) {
-            onResetPassword(password, userToReset);
+            onResetPassword(await hashPassword(password), userToReset);
         }
     };
 

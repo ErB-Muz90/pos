@@ -202,20 +202,20 @@ export class InventoryService {
         });
       }
 
-      // TODO: Create movement record when InventoryMovement model is added
-      // await tx.inventoryMovement.create({
-      //   data: {
-      //     branchId: adjustDto.branchId,
-      //     productId: adjustDto.productId,
-      //     type: adjustDto.type,
-      //     quantity: adjustDto.quantity,
-      //     quantityBefore: oldQuantity,
-      //     quantityAfter: newQuantity,
-      //     userId,
-      //     reason: adjustDto.reason,
-      //     referenceNumber: adjustDto.referenceNumber,
-      //   },
-      // });
+      // Create movement record
+      await tx.inventoryMovement.create({
+        data: {
+          branchId: adjustDto.branchId,
+          productId: adjustDto.productId,
+          type: adjustDto.type,
+          quantity: adjustDto.quantity,
+          quantityBefore: oldQuantity,
+          quantityAfter: newQuantity,
+          userId,
+          reason: adjustDto.reason,
+          referenceNumber: adjustDto.referenceNumber,
+        },
+      });
 
       this.logger.log(
         `Inventory adjusted: Product ${adjustDto.productId}, Branch ${adjustDto.branchId}, Qty ${adjustDto.quantity}`,
@@ -301,35 +301,34 @@ export class InventoryService {
         });
       }
 
-      // TODO: Create movement records when InventoryMovement model is added
+      // Create movement records for transfer
       const referenceNumber = `TRF-${Date.now()}`;
-
-      // await tx.inventoryMovement.createMany({
-      //   data: [
-      //     {
-      //       branchId: transferDto.fromBranchId,
-      //       productId: transferDto.productId,
-      //       type: 'transfer_out',
-      //       quantity: -transferDto.quantity,
-      //       quantityBefore: Number(sourceInventory.quantity),
-      //       quantityAfter: newSourceQty,
-      //       userId,
-      //       reason: transferDto.notes,
-      //       referenceNumber,
-      //     },
-      //     {
-      //       branchId: transferDto.toBranchId,
-      //       productId: transferDto.productId,
-      //       type: 'transfer_in',
-      //       quantity: transferDto.quantity,
-      //       quantityBefore: Number(destInventory?.quantity || 0),
-      //       quantityAfter: Number(destInventory?.quantity || 0) + transferDto.quantity,
-      //       userId,
-      //       reason: transferDto.notes,
-      //       referenceNumber,
-      //     },
-      //   ],
-      // });
+      await tx.inventoryMovement.createMany({
+        data: [
+          {
+            branchId: transferDto.fromBranchId,
+            productId: transferDto.productId,
+            type: 'transfer_out',
+            quantity: -transferDto.quantity,
+            quantityBefore: Number(sourceInventory.quantity),
+            quantityAfter: newSourceQty,
+            userId,
+            reason: transferDto.notes,
+            referenceNumber,
+          },
+          {
+            branchId: transferDto.toBranchId,
+            productId: transferDto.productId,
+            type: 'transfer_in',
+            quantity: transferDto.quantity,
+            quantityBefore: Number(destInventory?.quantity || 0),
+            quantityAfter: Number(destInventory?.quantity || 0) + transferDto.quantity,
+            userId,
+            reason: transferDto.notes,
+            referenceNumber,
+          },
+        ],
+      });
 
       this.logger.log(
         `Inventory transferred: Product ${transferDto.productId}, From ${transferDto.fromBranchId} to ${transferDto.toBranchId}, Qty ${transferDto.quantity}`,
@@ -383,23 +382,23 @@ export class InventoryService {
         });
       }
 
-      // TODO: Create movement record when InventoryMovement model is added
-      // await tx.inventoryMovement.create({
-      //   data: {
-      //     branchId: receiveDto.branchId,
-      //     productId: receiveDto.productId,
-      //     type: 'purchase',
-      //     quantity: receiveDto.quantity,
-      //     quantityBefore: oldQuantity,
-      //     quantityAfter: newQuantity,
-      //     unitCost: receiveDto.unitCost,
-      //     userId,
-      //     referenceNumber: receiveDto.purchaseOrderNumber,
-      //     metadata: receiveDto.supplierReference
-      //       ? { supplierReference: receiveDto.supplierReference }
-      //       : undefined,
-      //   },
-      // });
+      // Create movement record
+      await tx.inventoryMovement.create({
+        data: {
+          branchId: receiveDto.branchId,
+          productId: receiveDto.productId,
+          type: 'purchase',
+          quantity: receiveDto.quantity,
+          quantityBefore: oldQuantity,
+          quantityAfter: newQuantity,
+          unitCost: receiveDto.unitCost,
+          userId,
+          referenceNumber: receiveDto.purchaseOrderNumber,
+          metadata: receiveDto.supplierReference
+            ? { supplierReference: receiveDto.supplierReference }
+            : undefined,
+        },
+      });
 
       this.logger.log(
         `Stock received: Product ${receiveDto.productId}, Branch ${receiveDto.branchId}, Qty ${receiveDto.quantity}`,
@@ -411,7 +410,6 @@ export class InventoryService {
 
   /**
    * Get inventory movements (history)
-   * TODO: Implement when InventoryMovement model is added
    */
   async getMovements(
     organizationId: string,
@@ -420,15 +418,30 @@ export class InventoryService {
     page: number = 1,
     limit: number = 50,
   ) {
-    // TODO: Return actual movements when model exists
+    const skip = (page - 1) * limit;
+    const where: any = {
+      branch: { organizationId },
+    };
+    if (branchId) where.branchId = branchId;
+    if (productId) where.productId = productId;
+
+    const [data, total] = await Promise.all([
+      this.prisma.inventoryMovement.findMany({
+        where,
+        include: {
+          product: { select: { id: true, name: true, sku: true } },
+          branch: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.inventoryMovement.count({ where }),
+    ]);
+
     return {
-      data: [],
-      meta: {
-        total: 0,
-        page,
-        limit,
-        totalPages: 0,
-      },
+      data,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
 

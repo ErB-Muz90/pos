@@ -8,6 +8,7 @@ import {
   IsInt,
   Min,
   MaxLength,
+  MinLength,
 } from 'class-validator';
 
 export class CreateOrganizationDto {
@@ -82,4 +83,51 @@ export class CreateOrganizationDto {
   @IsOptional()
   @Min(1)
   maxUsers?: number;
+
+  @ApiProperty({ example: 'Main Branch', required: false })
+  @IsString()
+  @IsOptional()
+  @MaxLength(255)
+  branchName?: string;
+
+  @ApiProperty({ example: 'MAIN', required: false })
+  @IsString()
+  @IsOptional()
+  @MaxLength(20)
+  branchCode?: string;
+
+  @ApiProperty({ example: 'admin@demostore.co.ke', required: false })
+  @IsString()
+  @IsOptional()
+  @MaxLength(100)
+  adminUsername?: string;
+
+  @ApiProperty({ example: 'admin@demostore.co.ke', required: false })
+  @IsEmail()
+  @IsOptional()
+  adminEmail?: string;
+
+  @ApiProperty({ example: 'Store Administrator', required: false })
+  @IsString()
+  @IsOptional()
+  @MaxLength(255)
+  adminFullName?: string;
+
+  @ApiProperty({ example: 'Password123!', required: false, minLength: 8 })
+  @IsString()
+  @IsOptional()
+  @MinLength(8)
+  adminPassword?: string;
+
+  @ApiProperty({ example: 'active', required: false, enum: ['active', 'trial', 'expired', 'suspended'] })
+  @IsString()
+  @IsOptional()
+  @IsEnum(['active', 'trial', 'expired', 'suspended'])
+  subscriptionStatus?: string;
+
+  @ApiProperty({ example: 'active', required: false, enum: ['active', 'suspended'] })
+  @IsString()
+  @IsOptional()
+  @IsEnum(['active', 'suspended'])
+  status?: string;
 }

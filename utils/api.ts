@@ -24,20 +24,26 @@ let refreshPromise: Promise<string | null> | null = null;
 export const getApiBaseUrl = () => API_BASE_URL;
 export const isBackendConfigured = () => Boolean(API_ORIGIN);
 
-export const getAuthToken = () => sessionStorage.getItem(ACCESS_TOKEN_KEY);
+const getStoredValue = (key: string) => sessionStorage.getItem(key) || localStorage.getItem(key);
 
-const getRefreshToken = () => sessionStorage.getItem(REFRESH_TOKEN_KEY);
+export const getAuthToken = () => getStoredValue(ACCESS_TOKEN_KEY);
+
+const getRefreshToken = () => getStoredValue(REFRESH_TOKEN_KEY);
 
 export const setAuthSession = (tokens: { accessToken: string; refreshToken?: string }) => {
     sessionStorage.setItem(ACCESS_TOKEN_KEY, tokens.accessToken);
+    localStorage.setItem(ACCESS_TOKEN_KEY, tokens.accessToken);
     if (tokens.refreshToken) {
         sessionStorage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
+        localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
     }
 };
 
 export const clearAuthSession = () => {
     sessionStorage.removeItem(ACCESS_TOKEN_KEY);
     sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
 };
 
 const parseApiResponse = async (response: Response) => {
@@ -114,6 +120,19 @@ export const fetchApi = async (path: string, options: RequestInit = {}, allowRet
         if (refreshedToken) {
             return fetchApi(path, options, false);
         }
+        // Refresh failed — session is dead, force logout
+        clearAuthSession();
+        window.dispatchEvent(new CustomEvent('pos:session-expired'));
+        throw new Error('Session expired. Please log in again.');
+    }
+
+    if (response.status === 403) {
+        const payload = await response.json().catch(() => null);
+        const message: string = payload?.message || '';
+        if (message.toLowerCase().includes('subscription')) {
+            window.dispatchEvent(new CustomEvent('pos:subscription-expired', { detail: message }));
+        }
+        throw new Error(message || 'Access denied');
     }
 
     return parseApiResponse(response);

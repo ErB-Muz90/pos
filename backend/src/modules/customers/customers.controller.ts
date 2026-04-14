@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Patch,
+  Put,
   Param,
   Delete,
   UseGuards,
@@ -110,6 +111,17 @@ export class CustomersController {
   @ApiResponse({ status: 200, description: 'Customer updated successfully' })
   @ApiResponse({ status: 404, description: 'Customer not found' })
   update(
+    @Param('id') id: string,
+    @CurrentUser('organizationId') organizationId: string,
+    @Body() updateCustomerDto: UpdateCustomerDto,
+  ) {
+    return this.customersService.update(id, organizationId, updateCustomerDto);
+  }
+
+  // PUT alias — frontend sends PUT
+  @Put(':id')
+  @Permissions('customers.update')
+  updatePut(
     @Param('id') id: string,
     @CurrentUser('organizationId') organizationId: string,
     @Body() updateCustomerDto: UpdateCustomerDto,

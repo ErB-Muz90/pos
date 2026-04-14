@@ -18,12 +18,12 @@ export class SupplierInvoicesService {
     return this.prisma.supplierInvoice.create({ data: { ...dto, organizationId } });
   }
 
-  async update(id: string, dto: any) {
-    return this.prisma.supplierInvoice.update({ where: { id }, data: dto });
+  async update(id: string, dto: any, organizationId: string) {
+    return this.prisma.supplierInvoice.update({ where: { id, organizationId }, data: dto });
   }
 
-  async recordPayment(id: string, payment: any) {
-    const invoice = await this.prisma.supplierInvoice.findUnique({ where: { id } });
+  async recordPayment(id: string, payment: any, organizationId: string) {
+    const invoice = await this.prisma.supplierInvoice.findUnique({ where: { id, organizationId } });
     if (!invoice) throw new Error('Invoice not found');
     const payments = [...(invoice.payments as any[]), { ...payment, id: `pay_${Date.now()}` }];
     const amountPaid = payments.reduce((s: number, p: any) => s + Number(p.amount), 0);

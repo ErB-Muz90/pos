@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState, ReactNode } from 'react';
 import { Sale, Product, Expense, Settings, SupplierPayment, BankDeposit, Shift, SupplierInvoice, Payment, AccountingTransaction, Account } from '../../types';
-import { motion } from 'framer-motion';
+import { ModernButton, ModernInput, ModernShell } from '../common/ModernUI';
 
 interface FiscalPeriodReportProps {
     sales: Sale[];
@@ -207,26 +207,22 @@ const FiscalPeriodReportView: React.FC<FiscalPeriodReportProps> = ({ sales, prod
     };
 
     return (
-        <div className="p-4 md:p-6 bg-muted dark:bg-dark-muted min-h-full">
-            <div className="flex justify-between items-center mb-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-foreground dark:text-dark-foreground">Fiscal Period Report</h1>
-                    <p className="text-sm text-foreground-muted dark:text-dark-foreground-muted">Complete financial overview for the selected period</p>
-                </div>
-                <button onClick={handleExport} className="bg-primary text-primary-content font-bold px-4 py-2 rounded-lg shadow-sm flex items-center">
+        <ModernShell eyebrow="Analytics" title="Fiscal Period Report" description="Consolidated financial analytics across revenue, funds flow, balances, and operations for any selected fiscal window.">
+            <div className="flex justify-end">
+                <ModernButton onClick={handleExport}>
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                     Export Report
-                </button>
+                </ModernButton>
             </div>
 
             <div className="mb-6 p-4 bg-card dark:bg-dark-card rounded-lg shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4">
                  <div>
                     <label htmlFor="from-date" className="text-sm font-medium text-foreground-muted">From Date</label>
-                    <input id="from-date" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="w-full mt-1 p-2 bg-background dark:bg-dark-background border border-border dark:border-dark-border rounded-md" />
+                    <ModernInput id="from-date" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="w-full mt-1" />
                 </div>
                 <div>
                     <label htmlFor="to-date" className="text-sm font-medium text-foreground-muted">To Date</label>
-                    <input id="to-date" type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="w-full mt-1 p-2 bg-background dark:bg-dark-background border border-border dark:border-dark-border rounded-md" />
+                    <ModernInput id="to-date" type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="w-full mt-1" />
                 </div>
                 <div>
                     <label className="text-sm font-medium text-foreground-muted">Reporting Basis</label>
@@ -311,7 +307,7 @@ const FiscalPeriodReportView: React.FC<FiscalPeriodReportProps> = ({ sales, prod
                     <AdditionalMetricCard title="Tax Collected" value={formatCurrency(periodData.totalTax, settings.businessInfo.currency)} />
                 </div>
             </div>
-        </div>
+        </ModernShell>
     );
 };
 

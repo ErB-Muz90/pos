@@ -101,7 +101,7 @@ const NewWorkOrderView: React.FC<NewWorkOrderViewProps> = ({ products, customers
             jobTitle,
             description,
             status: 'Pending',
-            promisedDate: promisedDate ? new Date(promisedDate).toISOString() : undefined,
+            promisedDate: promisedDate ? new Date(promisedDate) : undefined,
             assignedTo,
             labourAmount: Number(labourAmount) || 0,
             materialsSubtotal: totals.materialsSubtotal,

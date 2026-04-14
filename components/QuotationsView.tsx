@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Quotation, Permission, Sale } from '../types';
+import React, { useMemo, useState } from 'react';
+import { AnimatePresence } from 'framer-motion';
+import { Permission, Quotation, Sale } from '../types';
+import { ModernButton, ModernEmptyState, ModernPanel, ModernSearchInput, ModernShell, ModernStatCard, ModernTableShell } from './common/ModernUI';
 
 interface QuotationsViewProps {
     quotations: Quotation[];
@@ -13,158 +14,174 @@ interface QuotationsViewProps {
     permissions: Permission[];
 }
 
+const icons = {
+    pending: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 2" /></svg>,
+    approved: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="m9 12 2 2 4-4" /><circle cx="12" cy="12" r="9" /></svg>,
+    converted: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="m4 14 5-5 4 4 7-7" /><path strokeLinecap="round" strokeLinejoin="round" d="M20 10V6h-4" /></svg>,
+    plus: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14m7-7H5" /></svg>,
+};
+
 const StatusBadge: React.FC<{ status: Quotation['status'] | 'Paid' }> = ({ status }) => {
-    const base = "px-2 py-0.5 text-xs font-semibold rounded-full";
     const map: Record<string, string> = {
-        Draft:     'text-yellow-800 bg-yellow-100 dark:bg-yellow-900/50 dark:text-yellow-300',
-        Sent:      'text-blue-800 bg-blue-100 dark:bg-blue-900/50 dark:text-blue-300',
-        Approved:  'text-emerald-800 bg-emerald-100 dark:bg-emerald-900/50 dark:text-emerald-300',
-        Rejected:  'text-red-800 bg-red-100 dark:bg-red-900/50 dark:text-red-300',
-        Expired:   'text-slate-700 bg-slate-200 dark:bg-slate-700 dark:text-slate-300',
-        Converted: 'text-purple-800 bg-purple-100 dark:bg-purple-900/50 dark:text-purple-300',
-        Invoiced:  'text-green-800 bg-green-100 dark:bg-green-900/50 dark:text-green-300',
-        Paid:      'text-green-800 bg-green-100 dark:bg-green-900/50 dark:text-green-300',
+        Draft: 'bg-amber-500/12 text-amber-700 dark:text-amber-300',
+        Sent: 'bg-blue-500/12 text-blue-700 dark:text-blue-300',
+        Approved: 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300',
+        Rejected: 'bg-rose-500/12 text-rose-700 dark:text-rose-300',
+        Expired: 'bg-slate-500/12 text-slate-700 dark:text-slate-300',
+        Converted: 'bg-violet-500/12 text-violet-700 dark:text-violet-300',
+        Invoiced: 'bg-violet-500/12 text-violet-700 dark:text-violet-300',
+        Paid: 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300',
     };
-    return <span className={`${base} ${map[status] || 'text-slate-600 bg-slate-100'}`}>{status}</span>;
+
+    return <span className={`rounded-full px-3 py-1 text-xs font-semibold ${map[status] || map.Draft}`}>{status}</span>;
 };
 
 const QuotationsView: React.FC<QuotationsViewProps> = ({
-    quotations, sales, onSelectQuotation, onCreateQuoteRequest,
-    onApprove, onReject, onCreateWorkOrder, permissions,
+    quotations,
+    sales,
+    onSelectQuotation,
+    onCreateQuoteRequest,
+    onApprove,
+    onReject,
+    onCreateWorkOrder,
+    permissions,
 }) => {
     const [searchTerm, setSearchTerm] = useState('');
-    const [rejectingQuote, setRejectingQuote] = useState<Quotation | null>(null);
+    const [rejectTarget, setRejectTarget] = useState<Quotation | null>(null);
     const [rejectReason, setRejectReason] = useState('');
-
     const canManage = permissions.includes('manage_quotations');
 
     const salesByQuotationId = useMemo(() => {
         const map = new Map<string, Sale>();
-        sales.forEach(s => { if (s.quotationId) map.set(s.quotationId, s); });
+        sales.forEach((sale) => {
+            if (sale.quotationId) {
+                map.set(sale.quotationId, sale);
+            }
+        });
         return map;
     }, [sales]);
 
-    const filtered = useMemo(() =>
-        quotations.filter(q =>
-            q.quoteNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            q.customerName.toLowerCase().includes(searchTerm.toLowerCase())
-        ), [quotations, searchTerm]);
-
     const pipeline = useMemo(() => ({
-        pending: quotations.filter(q => ['Draft', 'Sent'].includes(q.status)).reduce((s, q) => s + q.total, 0),
-        approved: quotations.filter(q => q.status === 'Approved').reduce((s, q) => s + q.total, 0),
-        converted: quotations.filter(q => ['Converted', 'Invoiced'].includes(q.status)).length,
-    }), [quotations]);
+        pending: quotations.filter((quote) => quote.status === 'Draft' || quote.status === 'Sent').reduce((sum, quote) => sum + quote.total, 0),
+        approved: quotations.filter((quote) => quote.status === 'Approved').reduce((sum, quote) => sum + quote.total, 0),
+        converted: quotations.filter((quote) => quote.status === 'Converted' || quote.status === 'Invoiced' || salesByQuotationId.has(quote.id)).length,
+    }), [quotations, salesByQuotationId]);
+
+    const filtered = useMemo(() => {
+        const query = searchTerm.toLowerCase();
+        return quotations
+            .filter((quote) => quote.quoteNumber.toLowerCase().includes(query) || quote.customerName.toLowerCase().includes(query))
+            .sort((a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime());
+    }, [quotations, searchTerm]);
 
     const handleRejectSubmit = () => {
-        if (!rejectingQuote || !rejectReason.trim()) return;
-        onReject(rejectingQuote, rejectReason.trim());
-        setRejectingQuote(null);
+        if (!rejectTarget || !rejectReason.trim()) {
+            return;
+        }
+        onReject(rejectTarget, rejectReason.trim());
+        setRejectTarget(null);
         setRejectReason('');
     };
 
+    const formatCurrency = (amount: number) => `Ksh ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
     return (
-        <div className="p-4 md:p-8">
-            {/* Header */}
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-foreground dark:text-dark-foreground">Quotations</h1>
-                {canManage && (
-                    <motion.button onClick={onCreateQuoteRequest} whileTap={{ scale: 0.95 }}
-                        className="bg-primary text-primary-content font-bold px-4 py-2 rounded-xl flex items-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                        New Quote
-                    </motion.button>
+        <ModernShell
+            eyebrow="Sales Pipeline"
+            title="Quotations"
+            description="Track quote pipeline value, approve or reject submissions, and move approved work into invoices or work orders with the updated POS layout."
+            actions={canManage ? <ModernButton onClick={onCreateQuoteRequest}>{icons.plus}New Quote</ModernButton> : undefined}
+        >
+            <AnimatePresence>
+                {rejectTarget && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+                        <div className="w-full max-w-md rounded-[28px] border border-white/60 bg-white/92 p-6 shadow-[0_35px_100px_-50px_rgba(15,23,42,0.7)] dark:border-white/10 dark:bg-slate-900/90">
+                            <h3 className="text-lg font-bold text-slate-950 dark:text-white">Reject Quotation</h3>
+                            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                                {rejectTarget.quoteNumber} for {rejectTarget.customerName}
+                            </p>
+                            <textarea
+                                value={rejectReason}
+                                onChange={(event) => setRejectReason(event.target.value)}
+                                rows={4}
+                                placeholder="Reason for rejection"
+                                className="mt-4 w-full rounded-2xl border border-slate-200 bg-white/90 p-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-violet-400 dark:border-white/10 dark:bg-slate-950/70 dark:text-white"
+                            />
+                            <div className="mt-5 flex justify-end gap-2">
+                                <ModernButton variant="secondary" onClick={() => { setRejectTarget(null); setRejectReason(''); }}>
+                                    Cancel
+                                </ModernButton>
+                                <ModernButton variant="danger" onClick={handleRejectSubmit} disabled={!rejectReason.trim()}>
+                                    Confirm Reject
+                                </ModernButton>
+                            </div>
+                        </div>
+                    </div>
                 )}
+            </AnimatePresence>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <ModernStatCard title="Pending Value" value={formatCurrency(pipeline.pending)} subtitle="Draft and sent quotes still open" icon={icons.pending} accent="amber" />
+                <ModernStatCard title="Approved Value" value={formatCurrency(pipeline.approved)} subtitle="Ready to invoice or convert" icon={icons.approved} accent="emerald" />
+                <ModernStatCard title="Converted / Paid" value={pipeline.converted} subtitle="Quotes already invoiced or linked to sales" icon={icons.converted} accent="violet" />
             </div>
 
-            {/* Pipeline summary */}
-            <div className="grid grid-cols-3 gap-4 mb-6">
-                <div className="bg-card dark:bg-dark-card p-4 rounded-xl border border-border dark:border-dark-border">
-                    <p className="text-xs font-semibold text-foreground-muted uppercase">Pending Approval</p>
-                    <p className="text-xl font-bold mt-1">KES {pipeline.pending.toLocaleString()}</p>
-                </div>
-                <div className="bg-card dark:bg-dark-card p-4 rounded-xl border border-border dark:border-dark-border">
-                    <p className="text-xs font-semibold text-emerald-600 uppercase">Approved</p>
-                    <p className="text-xl font-bold mt-1">KES {pipeline.approved.toLocaleString()}</p>
-                </div>
-                <div className="bg-card dark:bg-dark-card p-4 rounded-xl border border-border dark:border-dark-border">
-                    <p className="text-xs font-semibold text-purple-600 uppercase">Converted / Invoiced</p>
-                    <p className="text-xl font-bold mt-1">{pipeline.converted} quotes</p>
-                </div>
-            </div>
+            <ModernPanel>
+                <ModernSearchInput value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search by quote # or customer..." />
+            </ModernPanel>
 
-            {/* Search */}
-            <div className="mb-4">
-                <input type="text" placeholder="Search by quote number or customer..."
-                    className="w-full max-w-sm px-4 py-2 rounded-lg border border-border dark:border-dark-border bg-card dark:bg-dark-card focus:outline-none focus:ring-2 focus:ring-primary"
-                    value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-            </div>
-
-            {/* Table */}
-            <div className="bg-card dark:bg-dark-card rounded-xl shadow-sm border border-border dark:border-dark-border overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                    <thead className="text-xs uppercase bg-muted dark:bg-dark-muted font-bold text-foreground dark:text-dark-foreground">
+            <ModernTableShell title="Quotation Register" description="Open any quotation to inspect line items, export documents, or move it forward in the pipeline.">
+                <table className="w-full text-sm">
+                    <thead className="bg-slate-50/80 text-left text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:bg-slate-950/60 dark:text-slate-400">
                         <tr>
-                            <th className="px-4 py-3">Quote #</th>
-                            <th className="px-4 py-3">Customer</th>
-                            <th className="px-4 py-3">Status</th>
-                            <th className="px-4 py-3">Created</th>
-                            <th className="px-4 py-3">Expires</th>
-                            <th className="px-4 py-3 text-right">Total (KES)</th>
-                            <th className="px-4 py-3 text-right">Actions</th>
+                            <th className="px-6 py-4">Quote #</th>
+                            <th className="px-6 py-4">Customer</th>
+                            <th className="px-6 py-4">Status</th>
+                            <th className="px-6 py-4">Created</th>
+                            <th className="px-6 py-4">Expires</th>
+                            <th className="px-6 py-4 text-right">Total</th>
+                            <th className="px-6 py-4 text-right">Actions</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {filtered.length === 0 ? (
-                            <tr><td colSpan={7} className="text-center py-12 text-foreground-muted">No quotations found.</td></tr>
-                        ) : filtered.map(quote => {
+                    <tbody className="divide-y divide-slate-200/80 dark:divide-white/10">
+                        {filtered.map((quote) => {
                             const isPaid = salesByQuotationId.has(quote.id);
-                            const displayStatus = isPaid ? 'Paid' : quote.status;
                             const isExpired = !isPaid && quote.status !== 'Expired' && new Date(quote.expiryDate) < new Date();
+                            const displayStatus: Quotation['status'] | 'Paid' = isPaid ? 'Paid' : (isExpired ? 'Expired' : quote.status);
 
                             return (
-                                <tr key={quote.id}
-                                    className="border-b border-border dark:border-dark-border hover:bg-muted dark:hover:bg-dark-muted cursor-pointer"
-                                    onClick={() => onSelectQuotation(quote)}>
-                                    <td className="px-4 py-3 font-bold text-foreground dark:text-dark-foreground">{quote.quoteNumber}</td>
-                                    <td className="px-4 py-3">{quote.customerName}</td>
-                                    <td className="px-4 py-3">
-                                        <StatusBadge status={isExpired ? 'Expired' : displayStatus as any} />
+                                <tr key={quote.id} className="cursor-pointer transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-950/45" onClick={() => onSelectQuotation(quote)}>
+                                    <td className="px-6 py-4 font-semibold text-slate-900 dark:text-white">
+                                        {quote.quoteNumber}
+                                        {quote.version && quote.version > 1 ? ` v${quote.version}` : ''}
                                     </td>
-                                    <td className="px-4 py-3">{new Date(quote.createdDate).toLocaleDateString('en-GB', { timeZone: 'Africa/Nairobi' })}</td>
-                                    <td className={`px-4 py-3 ${isExpired ? 'text-red-500 font-semibold' : ''}`}>
+                                    <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{quote.customerName}</td>
+                                    <td className="px-6 py-4"><StatusBadge status={displayStatus} /></td>
+                                    <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{new Date(quote.createdDate).toLocaleDateString('en-GB', { timeZone: 'Africa/Nairobi' })}</td>
+                                    <td className={`px-6 py-4 ${isExpired ? 'font-semibold text-rose-600 dark:text-rose-300' : 'text-slate-600 dark:text-slate-300'}`}>
                                         {new Date(quote.expiryDate).toLocaleDateString('en-GB', { timeZone: 'Africa/Nairobi' })}
                                     </td>
-                                    <td className="px-4 py-3 text-right font-mono">{quote.total.toFixed(2)}</td>
-                                    <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
-                                        <div className="flex items-center justify-end gap-2 flex-wrap">
-                                            {/* View always available */}
-                                            <button onClick={() => onSelectQuotation(quote)}
-                                                className="text-xs font-semibold text-primary dark:text-dark-primary hover:underline">
+                                    <td className="px-6 py-4 text-right font-semibold text-slate-900 dark:text-white">{formatCurrency(quote.total)}</td>
+                                    <td className="px-6 py-4 text-right" onClick={(event) => event.stopPropagation()}>
+                                        <div className="flex flex-wrap justify-end gap-2">
+                                            {canManage && quote.status === 'Sent' && !isExpired ? (
+                                                <ModernButton variant="secondary" onClick={() => onApprove(quote)} className="px-3 py-2">
+                                                    Approve
+                                                </ModernButton>
+                                            ) : null}
+                                            {canManage && quote.status === 'Sent' && !isExpired ? (
+                                                <ModernButton variant="danger" onClick={() => { setRejectTarget(quote); setRejectReason(''); }} className="px-3 py-2">
+                                                    Reject
+                                                </ModernButton>
+                                            ) : null}
+                                            {canManage && quote.status === 'Approved' && !isPaid ? (
+                                                <ModernButton variant="secondary" onClick={() => onCreateWorkOrder(quote)} className="px-3 py-2">
+                                                    To Work Order
+                                                </ModernButton>
+                                            ) : null}
+                                            <ModernButton variant="ghost" onClick={() => onSelectQuotation(quote)} className="px-3 py-2">
                                                 View
-                                            </button>
-
-                                            {/* Approve / Reject — only for Sent quotes */}
-                                            {canManage && quote.status === 'Sent' && !isExpired && (
-                                                <>
-                                                    <button onClick={() => onApprove(quote)}
-                                                        className="text-xs font-bold px-2 py-1 bg-emerald-600 text-white rounded-md hover:bg-emerald-700">
-                                                        Approve
-                                                    </button>
-                                                    <button onClick={() => { setRejectingQuote(quote); setRejectReason(''); }}
-                                                        className="text-xs font-bold px-2 py-1 bg-red-100 text-red-700 rounded-md hover:bg-red-200">
-                                                        Reject
-                                                    </button>
-                                                </>
-                                            )}
-
-                                            {/* → Work Order — only for Approved quotes */}
-                                            {canManage && quote.status === 'Approved' && (
-                                                <button onClick={() => onCreateWorkOrder(quote)}
-                                                    className="text-xs font-bold px-2 py-1 bg-purple-600 text-white rounded-md hover:bg-purple-700 whitespace-nowrap">
-                                                    → Work Order
-                                                </button>
-                                            )}
+                                            </ModernButton>
                                         </div>
                                     </td>
                                 </tr>
@@ -172,40 +189,14 @@ const QuotationsView: React.FC<QuotationsViewProps> = ({
                         })}
                     </tbody>
                 </table>
-            </div>
 
-            {/* Reject modal */}
-            <AnimatePresence>
-                {rejectingQuote && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
-                        onClick={() => setRejectingQuote(null)}>
-                        <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }}
-                            className="bg-card dark:bg-dark-card rounded-xl p-6 w-full max-w-md shadow-2xl"
-                            onClick={e => e.stopPropagation()}>
-                            <h3 className="text-lg font-bold mb-1">Reject Quotation</h3>
-                            <p className="text-sm text-foreground-muted mb-4">{rejectingQuote.quoteNumber} — {rejectingQuote.customerName}</p>
-                            <textarea
-                                value={rejectReason}
-                                onChange={e => setRejectReason(e.target.value)}
-                                placeholder="Reason for rejection (required)"
-                                rows={3}
-                                className="w-full p-2 border border-border dark:border-dark-border rounded-md bg-background dark:bg-dark-background text-sm resize-none"
-                                autoFocus
-                            />
-                            <div className="flex justify-end gap-2 mt-4">
-                                <button onClick={() => setRejectingQuote(null)}
-                                    className="px-4 py-2 text-sm font-semibold bg-muted dark:bg-dark-muted rounded-lg">Cancel</button>
-                                <button onClick={handleRejectSubmit} disabled={!rejectReason.trim()}
-                                    className="px-4 py-2 text-sm font-bold bg-red-600 text-white rounded-lg disabled:opacity-50">
-                                    Confirm Reject
-                                </button>
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </div>
+                {filtered.length === 0 ? (
+                    <div className="p-6">
+                        <ModernEmptyState title="No quotations found." description="Create a quotation or broaden the current search." />
+                    </div>
+                ) : null}
+            </ModernTableShell>
+        </ModernShell>
     );
 };
 

@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Body, Param, Query, UseGuards } from '@nest
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { TenantResourceGuard, TenantModel } from '../../common/guards/tenant-resource.guard';
 import { SupplierInvoicesService } from './supplier-invoices.service';
 
 @ApiTags('supplier-invoices')
@@ -22,12 +23,16 @@ export class SupplierInvoicesController {
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() dto: any) {
-    return this.svc.update(id, dto);
+  @UseGuards(TenantResourceGuard)
+  @TenantModel('supplierInvoice')
+  update(@Param('id') id: string, @Body() dto: any, @CurrentUser('organizationId') orgId: string) {
+    return this.svc.update(id, dto, orgId);
   }
 
   @Post(':id/payment')
-  recordPayment(@Param('id') id: string, @Body() dto: any) {
-    return this.svc.recordPayment(id, dto);
+  @UseGuards(TenantResourceGuard)
+  @TenantModel('supplierInvoice')
+  recordPayment(@Param('id') id: string, @Body() dto: any, @CurrentUser('organizationId') orgId: string) {
+    return this.svc.recordPayment(id, dto, orgId);
   }
 }

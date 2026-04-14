@@ -1,6 +1,7 @@
 import React, { useState, useMemo, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sale, SupplierInvoice, Settings } from '../types';
+import { ModernButton, ModernInput, ModernShell, ModernStatCard } from './common/ModernUI';
 
 interface TaxReportViewProps {
     sales: Sale[];
@@ -14,18 +15,6 @@ type Tab = 'SalesVAT' | 'InputVAT';
 const ArrowDownCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500"><circle cx="12" cy="12" r="10"/><polyline points="8 12 12 16 16 12"/><line x1="12" y1="8" x2="12" y2="16"/></svg>;
 const ArrowUpCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-500"><circle cx="12" cy="12" r="10" /><polyline points="16 12 12 8 8 12" /><line x1="12" y1="16" x2="12" y2="8" /></svg>;
 const ScaleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500"><line x1="12" y1="2" x2="12" y2="22"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>;
-
-const StatCard: React.FC<{ title: string; value: string; icon: ReactNode; isWarning?: boolean }> = ({ title, value, icon, isWarning }) => (
-    <div className={`bg-card dark:bg-dark-card p-4 rounded-xl shadow-sm flex items-center space-x-4 border ${isWarning ? 'border-red-300 dark:border-red-500/50' : 'border-border dark:border-dark-border'}`}>
-        <div className={`p-3 rounded-lg ${isWarning ? 'text-red-500 bg-red-100 dark:bg-red-900/50' : 'text-primary dark:text-dark-primary bg-muted dark:bg-dark-muted'}`}>
-            {icon}
-        </div>
-        <div>
-            <p className="text-sm text-foreground-muted dark:text-dark-foreground-muted font-semibold">{title}</p>
-            <p className="text-xl font-bold text-foreground dark:text-dark-foreground">{value}</p>
-        </div>
-    </div>
-);
 
 
 const aggregateDataByMonth = (items: any[], dateField: string, valueFields: { key: string, label: string }[]) => {
@@ -227,39 +216,26 @@ const TaxReportView = ({ sales, supplierInvoices, settings }: TaxReportViewProps
     };
 
     return (
-        <div className="p-4 md:p-6 h-full overflow-y-auto bg-background dark:bg-dark-background text-foreground dark:text-dark-foreground">
-             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-                 <div>
-                    <h1 className="text-3xl font-bold">Tax Report</h1>
-                    <p className="text-foreground-muted dark:text-dark-foreground-muted mt-1">View and export VAT information for tax filing</p>
-                </div>
-                 <div className="flex items-center space-x-2 mt-4 md:mt-0">
-                     <motion.button 
-                        onClick={handleExport}
-                        whileTap={{ scale: 0.95 }}
-                        className="bg-green-600 text-white font-bold px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-green-700 transition-colors"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                        <span>Export to XLS</span>
-                    </motion.button>
-                </div>
+        <ModernShell eyebrow="Tax Compliance" title="Tax Report" description="Review output VAT, input VAT, and net tax position, then export the current filing view.">
+            <div className="flex justify-end">
+                <ModernButton onClick={handleExport}>Export to XLS</ModernButton>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                <StatCard title="Total VAT Payable (Output)" value={formatCurrency(summary.totalSalesVat)} icon={<ArrowDownCircleIcon />} />
-                <StatCard title="Total VAT Claimable (Input)" value={formatCurrency(summary.totalInputVat)} icon={<ArrowUpCircleIcon />} />
-                <StatCard title="Net VAT Position" value={formatCurrency(summary.netVatPosition)} icon={<ScaleIcon />} isWarning={summary.netVatPosition > 0} />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <ModernStatCard title="Total VAT Payable" value={formatCurrency(summary.totalSalesVat)} subtitle="Output VAT from sales" icon={<ArrowDownCircleIcon />} accent="rose" />
+                <ModernStatCard title="Total VAT Claimable" value={formatCurrency(summary.totalInputVat)} subtitle="Input VAT from purchases" icon={<ArrowUpCircleIcon />} accent="emerald" />
+                <ModernStatCard title="Net VAT Position" value={formatCurrency(summary.netVatPosition)} subtitle="Net payable or recoverable VAT" icon={<ScaleIcon />} accent={summary.netVatPosition > 0 ? 'amber' : 'blue'} />
             </div>
             
             <div className="bg-card dark:bg-dark-card rounded-xl shadow-sm border border-border dark:border-dark-border p-6">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
                         <label htmlFor="dateFrom" className="text-sm font-medium text-foreground-muted">From</label>
-                        <input type="date" id="dateFrom" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-full mt-1 px-4 py-2 rounded-lg border border-border dark:border-dark-border bg-background dark:bg-dark-background" />
+                        <ModernInput type="date" id="dateFrom" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-full mt-1" />
                     </div>
                      <div>
                         <label htmlFor="dateTo" className="text-sm font-medium text-foreground-muted">To</label>
-                        <input type="date" id="dateTo" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-full mt-1 px-4 py-2 rounded-lg border border-border dark:border-dark-border bg-background dark:bg-dark-background" />
+                        <ModernInput type="date" id="dateTo" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-full mt-1" />
                     </div>
                 </div>
 
@@ -282,7 +258,7 @@ const TaxReportView = ({ sales, supplierInvoices, settings }: TaxReportViewProps
                     </AnimatePresence>
                 </div>
             </div>
-        </div>
+        </ModernShell>
     );
 };
 

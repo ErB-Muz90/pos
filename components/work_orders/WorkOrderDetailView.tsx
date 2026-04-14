@@ -88,7 +88,7 @@ export const WorkOrderDetailView: React.FC<WorkOrderDetailViewProps> = ({ workOr
             ...workOrder,
             status,
             assignedTo: assignedTo || undefined,
-            updatedAt: new Date().toISOString(),
+            updatedAt: new Date(),
         };
         onUpdate(updatedWorkOrder);
     };

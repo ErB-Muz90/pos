@@ -1,11 +1,12 @@
-
-
-import React, { useState, useMemo, ReactNode, useEffect } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { PurchaseOrder, Supplier, Product, PurchaseOrderData, Permission, Settings, PurchaseOrderItem, SalesOrder, Supplier as TSupplier } from '../../types';
-// FIX: Changed to a default import to match the export from CreatePOForm.
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import { Permission, Product, PurchaseOrder, PurchaseOrderData, PurchaseOrderItem, SalesOrder, Settings, Supplier, Supplier as TSupplier } from '../../types';
 import CreatePOForm from './CreatePOForm';
 import PODetailView from './PODetailView';
+import PurchaseOrderDocument from './PurchaseOrderDocument';
+import { ModernButton, ModernEmptyState, ModernInput, ModernPanel, ModernSearchInput, ModernSelect, ModernShell, ModernStatCard, ModernTableShell } from '../common/ModernUI';
 
 interface PurchasesViewProps {
     purchaseOrders: PurchaseOrder[];
@@ -25,21 +26,23 @@ interface PurchasesViewProps {
 type ViewMode = 'list' | 'create';
 
 const StatusBadge = ({ status }: { status: PurchaseOrder['status'] }) => {
-    const baseClasses = "px-2 py-1 text-xs font-semibold rounded-full";
-    switch (status) {
-        case 'Received':
-            return <span className={`${baseClasses} text-green-800 bg-green-100 dark:bg-green-900/50 dark:text-green-300`}>Received</span>;
-        case 'Partially Received':
-            return <span className={`${baseClasses} text-sky-800 bg-sky-100 dark:bg-sky-900/50 dark:text-sky-300`}>Partially Received</span>;
-        case 'Sent':
-            return <span className={`${baseClasses} text-blue-800 bg-blue-100 dark:bg-blue-900/50 dark:text-blue-300`}>Sent</span>;
-        case 'Draft':
-            return <span className={`${baseClasses} text-yellow-800 bg-yellow-100 dark:bg-yellow-900/50 dark:text-yellow-300`}>Draft</span>;
-        case 'Cancelled':
-            return <span className={`${baseClasses} text-red-800 bg-red-100 dark:bg-red-900/50 dark:text-red-300`}>Cancelled</span>;
-        default:
-            return <span className={`${baseClasses} text-slate-800 bg-slate-100 dark:bg-slate-700 dark:text-slate-300`}>Unknown</span>;
-    }
+    const styles = {
+        Received: 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300',
+        'Partially Received': 'bg-blue-500/12 text-blue-700 dark:text-blue-300',
+        Sent: 'bg-violet-500/12 text-violet-700 dark:text-violet-300',
+        Draft: 'bg-amber-500/12 text-amber-700 dark:text-amber-300',
+        Cancelled: 'bg-rose-500/12 text-rose-700 dark:text-rose-300',
+    } as const;
+
+    return <span className={`rounded-full px-3 py-1 text-xs font-semibold ${styles[status]}`}>{status}</span>;
+};
+
+const icons = {
+    po: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M8 3h8l4 4v14H4V3Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M16 3v4h4" /><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h8M8 16h6" /></svg>,
+    truck: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M10 17h4V5H2v12h3" /><path strokeLinecap="round" strokeLinejoin="round" d="M14 8h4l4 4v5h-3" /><circle cx="7.5" cy="17.5" r="1.5" /><circle cx="17.5" cy="17.5" r="1.5" /></svg>,
+    alert: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 17h.01" /><path strokeLinecap="round" strokeLinejoin="round" d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" /></svg>,
+    plus: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14m7-7H5" /></svg>,
+    download: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v12m0 0-4-4m4 4 4-4" /><path strokeLinecap="round" strokeLinejoin="round" d="M4 20h16" /></svg>,
 };
 
 export const PurchasesView = ({ purchaseOrders, suppliers, products, onReceivePORequest, onAddPurchaseOrder, onAddSupplier, permissions, onSendPO, onWhatsAppPORequest, settings, salesOrderForPO, onClearSalesOrderForPO }: PurchasesViewProps) => {
@@ -48,20 +51,26 @@ export const PurchasesView = ({ purchaseOrders, suppliers, products, onReceivePO
     const [prefilledItems, setPrefilledItems] = useState<Omit<PurchaseOrderItem, 'quantityReceived'>[] | null>(null);
     const [prefilledSalesOrderId, setPrefilledSalesOrderId] = useState<string | undefined>(undefined);
     const [reorderQuantities, setReorderQuantities] = useState<Record<string, number>>({});
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState<PurchaseOrder['status'] | 'All'>('All');
+    const [dateFrom, setDateFrom] = useState('');
+    const [dateTo, setDateTo] = useState('');
+    const [downloadingId, setDownloadingId] = useState<string | null>(null);
+    const hiddenPdfRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
     useEffect(() => {
         if (salesOrderForPO) {
             const itemsToOrder: Omit<PurchaseOrderItem, 'quantityReceived'>[] = salesOrderForPO.items
-                .filter(p => p.status === 'Pending')
-                .map(p => ({
-                    productId: p.productId!,
-                    productName: p.description,
-                    quantity: p.quantity,
-                    cost: products.find(prod => prod.id === p.productId)?.costPrice || 0,
-                    unitOfMeasure: products.find(prod => prod.id === p.productId)?.unitOfMeasure || 'pc(s)',
-                    salesOrderItemId: p.id
+                .filter((item) => item.status === 'Pending')
+                .map((item) => ({
+                    productId: item.productId!,
+                    productName: item.description,
+                    quantity: item.quantity,
+                    cost: products.find((product) => product.id === item.productId)?.costPrice || 0,
+                    unitOfMeasure: products.find((product) => product.id === item.productId)?.unitOfMeasure || 'pc(s)',
+                    salesOrderItemId: item.id,
                 }));
-            
+
             setPrefilledItems(itemsToOrder);
             setPrefilledSalesOrderId(salesOrderForPO.id);
             setViewMode('create');
@@ -69,45 +78,70 @@ export const PurchasesView = ({ purchaseOrders, suppliers, products, onReceivePO
         }
     }, [salesOrderForPO, products, onClearSalesOrderForPO]);
 
-    const supplierMap = useMemo(() => {
-        return suppliers.reduce((acc, supplier) => {
-            acc[supplier.id] = supplier.name;
-            return acc;
-        }, {} as Record<string, string>);
-    }, [suppliers]);
-    
+    const supplierMap = useMemo(() => suppliers.reduce((acc, supplier) => {
+        acc[supplier.id] = supplier.name;
+        return acc;
+    }, {} as Record<string, string>), [suppliers]);
+
+    const filteredPOs = useMemo(() => {
+        return purchaseOrders
+            .filter((purchaseOrder) => {
+                if (statusFilter !== 'All' && purchaseOrder.status !== statusFilter) return false;
+                if (search) {
+                    const query = search.toLowerCase();
+                    const supplierName = (supplierMap[purchaseOrder.supplierId] || '').toLowerCase();
+                    if (!purchaseOrder.poNumber.toLowerCase().includes(query) && !supplierName.includes(query)) return false;
+                }
+                if (dateFrom && new Date(purchaseOrder.createdDate) < new Date(dateFrom)) return false;
+                if (dateTo && new Date(purchaseOrder.createdDate) > new Date(`${dateTo}T23:59:59`)) return false;
+                return true;
+            })
+            .sort((a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime());
+    }, [purchaseOrders, statusFilter, search, dateFrom, dateTo, supplierMap]);
+
+    const downloadPDF = useCallback(async (purchaseOrder: PurchaseOrder, event: React.MouseEvent) => {
+        event.stopPropagation();
+        setDownloadingId(purchaseOrder.id);
+        try {
+            const element = hiddenPdfRefs.current[purchaseOrder.id];
+            if (!element) return;
+            const canvas = await html2canvas(element, { scale: 2, useCORS: true });
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const width = pdf.internal.pageSize.getWidth();
+            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, width, (canvas.height * width) / canvas.width);
+            pdf.save(`PurchaseOrder_${purchaseOrder.poNumber}.pdf`);
+        } finally {
+            setDownloadingId(null);
+        }
+    }, []);
+
     const canManage = permissions.includes('manage_purchases');
-    
     const lowStockItems = useMemo(() => {
         const threshold = settings.inventory?.lowStockThreshold ?? 3;
-        return products.filter(p => p.productType === 'Inventory' && p.stock <= threshold);
-    }, [products, settings.inventory.lowStockThreshold]);
+        return products.filter((product) => product.productType === 'Inventory' && product.stock <= threshold);
+    }, [products, settings.inventory?.lowStockThreshold]);
 
     const handleReorderQuantityChange = (productId: string, value: string) => {
         const quantity = parseInt(value, 10);
-        setReorderQuantities(prev => ({
-            ...prev,
-            [productId]: isNaN(quantity) || quantity < 0 ? 0 : quantity,
-        }));
+        setReorderQuantities((current) => ({ ...current, [productId]: Number.isNaN(quantity) || quantity < 0 ? 0 : quantity }));
     };
 
-    const itemsToReorderCount = useMemo(() => {
-        return Object.values(reorderQuantities).filter((qty: number) => qty > 0).length;
-    }, [reorderQuantities]);
+    const itemsToReorderCount = useMemo(() => Object.values(reorderQuantities).filter((quantity) => quantity > 0).length, [reorderQuantities]);
+    const receivedCount = purchaseOrders.filter((purchaseOrder) => purchaseOrder.status === 'Received').length;
 
     const handleCreatePOForReorderItems = () => {
         const itemsToOrder: Omit<PurchaseOrderItem, 'quantityReceived'>[] = lowStockItems
-            .filter(p => (reorderQuantities[p.id] || 0) > 0)
-            .map(p => ({
-                productId: p.id,
-                productName: p.name,
-                quantity: reorderQuantities[p.id],
-                cost: p.costPrice || 0,
-                unitOfMeasure: p.unitOfMeasure,
+            .filter((product) => (reorderQuantities[product.id] || 0) > 0)
+            .map((product) => ({
+                productId: product.id,
+                productName: product.name,
+                quantity: reorderQuantities[product.id],
+                cost: product.costPrice || 0,
+                unitOfMeasure: product.unitOfMeasure,
             }));
 
-        if (itemsToOrder.length === 0) {
-            alert("Please enter a quantity greater than 0 for at least one item.");
+        if (!itemsToOrder.length) {
+            alert('Please enter a quantity greater than 0 for at least one item.');
             return;
         }
 
@@ -122,8 +156,8 @@ export const PurchasesView = ({ purchaseOrders, suppliers, products, onReceivePO
         setPrefilledSalesOrderId(undefined);
     };
 
-    const handleSavePO = async (poData: PurchaseOrderData) => {
-        const newPO = await onAddPurchaseOrder(poData);
+    const handleSavePO = async (purchaseOrderData: PurchaseOrderData) => {
+        const newPO = await onAddPurchaseOrder(purchaseOrderData);
         setViewMode('list');
         setPrefilledItems(null);
         setPrefilledSalesOrderId(undefined);
@@ -133,23 +167,23 @@ export const PurchasesView = ({ purchaseOrders, suppliers, products, onReceivePO
 
     if (viewMode === 'create') {
         return (
-            <CreatePOForm 
+            <CreatePOForm
                 suppliers={suppliers}
                 products={products}
                 onSave={handleSavePO}
-                onCancel={handleCancelCreatePO}
+                onClose={handleCancelCreatePO}
                 onAddSupplier={onAddSupplier}
                 prefilledItems={prefilledItems || undefined}
                 salesOrderId={prefilledSalesOrderId}
             />
         );
     }
-    
+
     if (selectedPO) {
         return (
             <PODetailView
                 purchaseOrder={selectedPO}
-                supplier={suppliers.find(s => s.id === selectedPO.supplierId)}
+                supplier={suppliers.find((supplier) => supplier.id === selectedPO.supplierId)}
                 onBack={() => setSelectedPO(null)}
                 onWhatsAppRequest={onWhatsAppPORequest}
                 products={products}
@@ -161,122 +195,128 @@ export const PurchasesView = ({ purchaseOrders, suppliers, products, onReceivePO
         );
     }
 
-
     return (
-        <div className="p-4 md:p-8 h-full overflow-y-auto bg-background dark:bg-dark-background">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-foreground dark:text-dark-foreground">Purchases</h1>
-                 {canManage && (
-                    <motion.button 
-                        onClick={() => { setPrefilledItems(null); setViewMode('create'); }}
-                        whileTap={{ scale: 0.95 }}
-                        className="bg-primary text-primary-content font-bold px-4 py-2 rounded-xl transition-shadow shadow-clay dark:shadow-clay-dark active:shadow-clay-inset dark:active:shadow-clay-dark-inset flex items-center"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                        New Purchase Order
-                    </motion.button>
-                )}
+        <ModernShell
+            eyebrow="Procurement"
+            title="Purchases"
+            description="Purchase orders, low-stock reorder prompts, and receiving actions now share the same modern operations layout."
+            actions={canManage ? <ModernButton onClick={() => { setPrefilledItems(null); setViewMode('create'); }}>{icons.plus}New Purchase Order</ModernButton> : undefined}
+        >
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <ModernStatCard title="Purchase Orders" value={purchaseOrders.length} subtitle="All PO records in the system" icon={icons.po} accent="violet" />
+                <ModernStatCard title="Received Orders" value={receivedCount} subtitle="POs fully received into stock" icon={icons.truck} accent="emerald" />
+                <ModernStatCard title="Low Stock Alerts" value={lowStockItems.length} subtitle="Inventory lines needing reorder" icon={icons.alert} accent="amber" />
+                <ModernStatCard title="Filtered Results" value={filteredPOs.length} subtitle="Records matching current filters" icon={icons.po} accent="blue" />
             </div>
-            
+
             {canManage && lowStockItems.length > 0 && (
-                <motion.div 
-                    layout
-                    initial={{ opacity: 0, y: -20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mb-8 bg-warning/10 dark:bg-dark-warning/10 p-4 rounded-xl border border-warning/20 dark:border-dark-warning/20"
-                >
-                    <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-xl font-bold text-warning dark:text-dark-warning">Items to Reorder ({lowStockItems.length})</h2>
-                        <motion.button
-                            onClick={handleCreatePOForReorderItems}
-                            disabled={itemsToReorderCount === 0}
-                            whileTap={{ scale: 0.95 }}
-                            className="bg-warning text-white font-bold px-4 py-2 rounded-xl transition-shadow shadow-clay dark:shadow-clay-dark active:shadow-clay-inset dark:active:shadow-clay-dark-inset flex items-center text-sm disabled:bg-slate-400 disabled:shadow-none disabled:cursor-not-allowed"
-                        >
+                <ModernPanel>
+                    <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <h2 className="text-lg font-semibold text-slate-950 dark:text-white">Low Stock Reorder Queue</h2>
+                            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Build a purchase order directly from low-stock items.</p>
+                        </div>
+                        <ModernButton onClick={handleCreatePOForReorderItems} disabled={itemsToReorderCount === 0}>
+                            {icons.plus}
                             Create PO for {itemsToReorderCount > 0 ? `${itemsToReorderCount} Item(s)` : 'Items'}
-                        </motion.button>
+                        </ModernButton>
                     </div>
-                    <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-                        {lowStockItems.map(item => (
-                            <div key={item.id} className="bg-card dark:bg-dark-card p-3 rounded-lg flex justify-between items-center shadow-sm">
-                                <div className="flex-grow">
-                                    <p className="font-bold text-foreground dark:text-dark-foreground">{item.name}</p>
-                                    <p className="text-xs text-foreground-muted dark:text-dark-foreground-muted font-mono">{item.inventoryCode}</p>
+                    <div className="space-y-3">
+                        {lowStockItems.map((item) => (
+                            <div key={item.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 dark:border-white/10 dark:bg-slate-950/45 md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <p className="font-semibold text-slate-900 dark:text-white">{item.name}</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">{item.inventoryCode} • Stock {item.stock}</p>
                                 </div>
-                                <div className="flex items-center gap-4">
-                                    <div className="text-center">
-                                        <p className="text-xs font-semibold text-foreground-muted dark:text-dark-foreground-muted">Stock</p>
-                                        <p className="font-bold text-danger">{item.stock}</p>
-                                    </div>
-                                    <div className="w-24">
-                                        <label htmlFor={`reorder-qty-${item.id}`} className="block text-xs font-semibold text-center text-foreground-muted dark:text-dark-foreground-muted mb-1">
-                                            Qty to Order
-                                        </label>
-                                        <input
-                                            id={`reorder-qty-${item.id}`}
-                                            type="number"
-                                            value={reorderQuantities[item.id] || 0}
-                                            onChange={(e) => handleReorderQuantityChange(item.id, e.target.value)}
-                                            min="0"
-                                            className="w-full p-1 border border-border dark:border-dark-border rounded-md text-center bg-background dark:bg-dark-background"
-                                            onClick={e => e.stopPropagation()}
-                                        />
-                                    </div>
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        value={reorderQuantities[item.id] || 0}
+                                        onChange={(event) => handleReorderQuantityChange(item.id, event.target.value)}
+                                        className="w-28 rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-center text-sm outline-none dark:border-white/10 dark:bg-slate-950/70"
+                                    />
                                 </div>
                             </div>
                         ))}
                     </div>
-                </motion.div>
+                </ModernPanel>
             )}
 
-            <div className="bg-card dark:bg-dark-card rounded-xl shadow-sm border border-border dark:border-dark-border overflow-x-auto">
-                <table className="w-full text-sm text-left text-foreground-muted dark:text-dark-foreground-muted">
-                    <thead className="text-xs text-foreground dark:text-dark-foreground uppercase bg-muted dark:bg-dark-muted font-bold">
+            <ModernTableShell
+                title="Purchase Order Register"
+                description="Search, filter, send, receive, and export purchase orders from one table."
+                actions={<span className="text-sm text-slate-500 dark:text-slate-400">{filteredPOs.length} record{filteredPOs.length === 1 ? '' : 's'}</span>}
+            >
+                <div className="grid gap-3 border-b border-slate-200/80 px-6 py-5 dark:border-white/10 xl:grid-cols-[1.2fr_0.7fr_0.6fr_0.6fr_auto]">
+                    <ModernSearchInput value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search PO # or supplier..." />
+                    <ModernSelect value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as PurchaseOrder['status'] | 'All')}>
+                        <option value="All">All Statuses</option>
+                        <option value="Draft">Draft</option>
+                        <option value="Sent">Sent</option>
+                        <option value="Partially Received">Partially Received</option>
+                        <option value="Received">Received</option>
+                        <option value="Cancelled">Cancelled</option>
+                    </ModernSelect>
+                    <ModernInput type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+                    <ModernInput type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+                    {(search || statusFilter !== 'All' || dateFrom || dateTo) ? <ModernButton variant="secondary" onClick={() => { setSearch(''); setStatusFilter('All'); setDateFrom(''); setDateTo(''); }}>Clear</ModernButton> : <div />}
+                </div>
+
+                <table className="w-full text-sm">
+                    <thead className="bg-slate-50/80 text-left text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:bg-slate-950/60 dark:text-slate-400">
                         <tr>
-                            <th scope="col" className="px-6 py-3">PO Number</th>
-                            <th scope="col" className="px-6 py-3">Supplier</th>
-                            <th scope="col" className="px-6 py-3">Status</th>
-                            <th scope="col" className="px-6 py-3">Expected Date</th>
-                            <th scope="col" className="px-6 py-3">Total Cost (Ksh)</th>
-                            <th scope="col" className="px-6 py-3"><span className="sr-only">Actions</span></th>
+                            <th className="px-6 py-4">PO Number</th>
+                            <th className="px-6 py-4">Supplier</th>
+                            <th className="px-6 py-4">Status</th>
+                            <th className="px-6 py-4">Date</th>
+                            <th className="px-6 py-4">Total Cost</th>
+                            <th className="px-6 py-4 text-right">Actions</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {purchaseOrders.map(po => (
-                            <tr key={po.id} className="bg-card dark:bg-dark-card border-b dark:border-dark-border hover:bg-muted dark:hover:bg-dark-muted cursor-pointer" onClick={() => setSelectedPO(po)}>
-                                <td className="px-6 py-4 font-bold text-foreground dark:text-dark-foreground">{po.poNumber}</td>
-                                <td className="px-6 py-4">{supplierMap[po.supplierId] || 'Unknown'}</td>
-                                <td className="px-6 py-4"><StatusBadge status={po.status} /></td>
-                                <td className="px-6 py-4">{new Date(po.expectedDate).toLocaleDateString('en-GB', {timeZone: 'Africa/Nairobi'})}</td>
-                                <td className="px-6 py-4 font-mono">{po.totalCost.toFixed(2)}</td>
-                                <td className="px-6 py-4 text-right">
-                                     {canManage && po.status === 'Draft' && (
-                                        <button 
-                                            onClick={(e) => { e.stopPropagation(); onSendPO(po.id); }}
-                                            className="font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 bg-blue-50 dark:bg-blue-900/50 hover:bg-blue-100 px-3 py-1 rounded-md"
+                    <tbody className="divide-y divide-slate-200/80 dark:divide-white/10">
+                        {filteredPOs.map((purchaseOrder) => (
+                            <tr key={purchaseOrder.id} className="cursor-pointer transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-950/45" onClick={() => setSelectedPO(purchaseOrder)}>
+                                <td className="px-6 py-4 font-semibold text-slate-900 dark:text-white">{purchaseOrder.poNumber}</td>
+                                <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{supplierMap[purchaseOrder.supplierId] || 'Unknown'}</td>
+                                <td className="px-6 py-4"><StatusBadge status={purchaseOrder.status} /></td>
+                                <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{new Date(purchaseOrder.createdDate).toLocaleDateString('en-GB', { timeZone: 'Africa/Nairobi' })}</td>
+                                <td className="px-6 py-4 font-semibold text-slate-900 dark:text-white">{purchaseOrder.totalCost.toFixed(2)}</td>
+                                <td className="px-6 py-4" onClick={(event) => event.stopPropagation()}>
+                                    <div className="flex justify-end gap-2">
+                                        {canManage && purchaseOrder.status === 'Draft' ? <ModernButton variant="secondary" onClick={() => onSendPO(purchaseOrder.id)} className="px-3 py-2">Send PO</ModernButton> : null}
+                                        {canManage && (purchaseOrder.status === 'Sent' || purchaseOrder.status === 'Partially Received') ? <ModernButton variant="secondary" onClick={() => onReceivePORequest(purchaseOrder)} className="px-3 py-2">Receive Stock</ModernButton> : null}
+                                        <motion.button
+                                            onClick={(event) => downloadPDF(purchaseOrder, event)}
+                                            disabled={downloadingId === purchaseOrder.id}
+                                            whileTap={{ scale: downloadingId === purchaseOrder.id ? 1 : 0.98 }}
+                                            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-200 dark:hover:bg-slate-800"
                                         >
-                                            Send PO
-                                        </button>
-                                    )}
-                                    {canManage && (po.status === 'Sent' || po.status === 'Partially Received') && (
-                                        <button 
-                                            onClick={(e) => { e.stopPropagation(); onReceivePORequest(po); }}
-                                            className="font-medium text-primary dark:text-dark-primary hover:text-primary-focus bg-primary/10 dark:bg-dark-primary/20 hover:bg-primary/20 px-3 py-1 rounded-md"
-                                        >
-                                            Receive Stock
-                                        </button>
-                                    )}
-                                    {(po.status === 'Received' || po.status === 'Cancelled') && (
-                                         <span className="font-medium text-foreground-muted dark:text-dark-foreground-muted">
-                                           View Details
-                                        </span>
-                                    )}
+                                            {icons.download}
+                                            {downloadingId === purchaseOrder.id ? 'Working...' : 'PDF'}
+                                        </motion.button>
+                                    </div>
+                                    <div className="pointer-events-none fixed -left-[9999px] -top-[9999px]" aria-hidden="true">
+                                        <PurchaseOrderDocument
+                                            ref={(element) => { hiddenPdfRefs.current[purchaseOrder.id] = element; }}
+                                            purchaseOrder={purchaseOrder}
+                                            supplier={suppliers.find((supplier) => supplier.id === purchaseOrder.supplierId)}
+                                            products={products}
+                                            settings={settings}
+                                        />
+                                    </div>
                                 </td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
-            </div>
-        </div>
+
+                {filteredPOs.length === 0 && (
+                    <div className="p-6">
+                        <ModernEmptyState title="No purchase orders found." description="Create a new purchase order or relax the current filters." />
+                    </div>
+                )}
+            </ModernTableShell>
+        </ModernShell>
     );
 };

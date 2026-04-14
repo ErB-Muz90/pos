@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Patch,
+  Put,
   Param,
   Delete,
   UseGuards,
@@ -76,6 +77,17 @@ export class UsersController {
   @ApiResponse({ status: 200, description: 'User updated successfully' })
   @ApiResponse({ status: 404, description: 'User not found' })
   update(
+    @Param('id') id: string,
+    @CurrentUser('organizationId') organizationId: string,
+    @Body() updateUserDto: UpdateUserDto,
+  ) {
+    return this.usersService.update(id, organizationId, updateUserDto);
+  }
+
+  // PUT alias — frontend sends PUT
+  @Put(':id')
+  @Roles('admin', 'manager')
+  updatePut(
     @Param('id') id: string,
     @CurrentUser('organizationId') organizationId: string,
     @Body() updateUserDto: UpdateUserDto,

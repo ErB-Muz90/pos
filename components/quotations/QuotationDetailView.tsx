@@ -1,11 +1,11 @@
 
 
 import React, { useRef, useState, useMemo } from 'react';
-import { motion } from 'framer-motion';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Quotation, Settings, Permission, Sale } from '../../types';
 import QuoteDocument from './QuoteDocument';
+import { ModernButton, ModernPanel, ModernShell, ModernStatCard } from '../common/ModernUI';
 
 interface QuotationDetailViewProps {
     quotation: Quotation;
@@ -46,6 +46,7 @@ const QuotationDetailView: React.FC<QuotationDetailViewProps> = ({ quotation, se
     const canManage = permissions.includes('manage_quotations');
     
     const linkedSale = useMemo(() => sales.find(s => s.quotationId === quotation.id), [sales, quotation.id]);
+    const formatCurrency = (amount: number) => `Ksh ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     const handleDownload = async (type: DocumentType) => {
         if (!pdfRef.current || isDownloading) return;
@@ -81,51 +82,44 @@ const QuotationDetailView: React.FC<QuotationDetailViewProps> = ({ quotation, se
     const DownloadIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>;
 
     return (
-        <div className="h-full overflow-y-auto bg-background dark:bg-dark-background">
-            <div className="p-4 md:p-8 space-y-6">
-                <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
-                    <button onClick={onBack} className="flex items-center text-sm font-bold text-primary dark:text-dark-primary hover:text-primary-focus">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                        Back to All Quotations
-                    </button>
-                    {linkedSale && (
-                        <div className="px-4 py-2 text-lg font-bold rounded-lg text-green-800 bg-green-100 dark:bg-green-900/50 dark:text-green-300 inline-block uppercase tracking-widest">
-                            Invoiced
-                        </div>
-                    )}
-                    {canManage && (
-                        <div className="flex flex-wrap items-center justify-center gap-2">
-                             <motion.button 
-                                onClick={() => handleDownload('Quotation')} 
-                                whileTap={{ scale: 0.95 }}
-                                disabled={isDownloading}
-                                className="bg-primary text-primary-content font-bold px-3 py-2 rounded-lg hover:bg-primary-focus transition-colors shadow-sm flex items-center text-sm disabled:bg-slate-400"
-                            >
-                                <DownloadIcon/> {isDownloading && downloadType === 'Quotation' ? 'Downloading...' : 'Quote PDF'}
-                            </motion.button>
-                             <motion.button 
-                                onClick={() => handleDownload('Proforma-Invoice')} 
-                                whileTap={{ scale: 0.95 }}
-                                disabled={isDownloading}
-                                className="bg-muted text-foreground dark:bg-dark-muted dark:text-dark-foreground font-bold px-3 py-2 rounded-lg hover:bg-border dark:hover:bg-dark-border transition-colors shadow-sm flex items-center text-sm disabled:bg-slate-400"
-                            >
-                                <DownloadIcon/> {isDownloading && downloadType === 'Proforma-Invoice' ? 'Downloading...' : 'Pro-forma PDF'}
-                            </motion.button>
-                            {!linkedSale && quotation.status === 'Approved' && (
-                                <motion.button 
-                                    onClick={() => onConvertQuoteToSale(quotation)} 
-                                    whileTap={{ scale: 0.95 }}
-                                    className="bg-accent text-black font-bold px-4 py-2 rounded-lg hover:opacity-80 transition-opacity shadow-md flex items-center text-sm"
-                                >
+        <ModernShell
+            eyebrow="Customer Document"
+            title={`Quotation ${quotation.quoteNumber}`}
+            description="Review the quotation document, export a branded PDF, or convert the approved quote into an invoice."
+            actions={
+                <div className="flex flex-wrap items-center gap-2">
+                    <ModernButton variant="secondary" onClick={onBack}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                        Back
+                    </ModernButton>
+                    {canManage ? (
+                        <>
+                            <ModernButton onClick={() => handleDownload('Quotation')} disabled={isDownloading}>
+                                <DownloadIcon />{isDownloading && downloadType === 'Quotation' ? 'Downloading...' : 'Quote PDF'}
+                            </ModernButton>
+                            <ModernButton variant="secondary" onClick={() => handleDownload('Proforma-Invoice')} disabled={isDownloading}>
+                                <DownloadIcon />{isDownloading && downloadType === 'Proforma-Invoice' ? 'Downloading...' : 'Pro-forma PDF'}
+                            </ModernButton>
+                            {!linkedSale && quotation.status === 'Approved' ? (
+                                <ModernButton variant="secondary" onClick={() => onConvertQuoteToSale(quotation)}>
                                     Create Invoice
-                                </motion.button>
-                            )}
-                        </div>
-                    )}
+                                </ModernButton>
+                            ) : null}
+                        </>
+                    ) : null}
                 </div>
-                
+            }
+        >
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+                <ModernStatCard title="Status" value={linkedSale ? 'Invoiced' : quotation.status} subtitle={quotation.customerName} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M8 3h8l4 4v14H4V3Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M16 3v4h4" /><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h8M8 16h5" /></svg>} accent="violet" />
+                <ModernStatCard title="Quotation Total" value={formatCurrency(quotation.total)} subtitle={`VAT ${settings.tax.vatRate}% included`} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-2.2 0-4 1.12-4 2.5S9.8 13 12 13s4 1.12 4 2.5S14.2 18 12 18s-4-1.12-4-2.5M12 6v12" /></svg>} accent="emerald" />
+                <ModernStatCard title="Valid Until" value={new Date(quotation.expiryDate).toLocaleDateString('en-GB', { timeZone: 'Africa/Nairobi' })} subtitle={`Created ${new Date(quotation.createdDate).toLocaleDateString('en-GB', { timeZone: 'Africa/Nairobi' })}`} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="5" width="18" height="16" rx="2" /><path strokeLinecap="round" strokeLinejoin="round" d="M16 3v4M8 3v4M3 11h18" /></svg>} accent="amber" />
+                <ModernStatCard title="Linked Invoice" value={linkedSale ? linkedSale.id : 'Not yet'} subtitle={linkedSale ? 'Quotation already converted' : 'Ready once approved'} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h8M8 11h8M8 15h5" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 3h9l3 3v15H6V3Z" /></svg>} accent="blue" />
+            </div>
+
+            <ModernPanel className="overflow-hidden p-4 md:p-6">
                 <div id="pdf-content-wrapper">
-                    <QuoteDocument 
+                    <QuoteDocument
                         ref={pdfRef}
                         quotation={quotation}
                         settings={settings}
@@ -134,8 +128,8 @@ const QuotationDetailView: React.FC<QuotationDetailViewProps> = ({ quotation, se
                         linkedSaleId={linkedSale?.id}
                     />
                 </div>
-            </div>
-        </div>
+            </ModernPanel>
+        </ModernShell>
     );
 };
 

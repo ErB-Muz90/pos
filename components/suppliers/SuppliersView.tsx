@@ -1,13 +1,12 @@
-
-
-import React, { useState, useMemo } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Supplier, PurchaseOrder, SupplierInvoice, Permission, SupplierPayment, Settings } from '../../types';
+import React, { useMemo, useState } from 'react';
+import { AnimatePresence } from 'framer-motion';
+import { Pie, PieChart, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { Permission, PurchaseOrder, Settings, Supplier, SupplierInvoice, SupplierPayment } from '../../types';
 import SupplierModal from '../purchases/SupplierModal';
 import ConfirmationModal from '../common/ConfirmationModal';
 import SupplierStatementView from './SupplierStatementView';
 import { useTheme } from '../../hooks/useTheme';
+import { ModernButton, ModernEmptyState, ModernPanel, ModernSearchInput, ModernShell, ModernStatCard, ModernTableShell } from '../common/ModernUI';
 
 interface SuppliersViewProps {
     suppliers: Supplier[];
@@ -21,12 +20,12 @@ interface SuppliersViewProps {
     settings: Settings;
 }
 
-const StatCard: React.FC<{ title: string; value: string; }> = ({ title, value }) => (
-    <div className="bg-card dark:bg-dark-card p-4 rounded-xl shadow-sm border border-border dark:border-dark-border">
-        <p className="text-sm font-semibold text-foreground-muted dark:text-dark-foreground-muted">{title}</p>
-        <p className="text-2xl font-bold text-foreground dark:text-dark-foreground mt-1">{value}</p>
-    </div>
-);
+const icons = {
+    supplier: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18" /><path strokeLinecap="round" strokeLinejoin="round" d="M5 21V7l7-4 7 4v14" /><path strokeLinecap="round" strokeLinejoin="round" d="M9 11h6M9 15h6" /></svg>,
+    invoice: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M8 3h8l4 4v14H4V3Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M16 3v4h4" /><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h8" /><path strokeLinecap="round" strokeLinejoin="round" d="M8 16h5" /></svg>,
+    wallet: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="6" width="18" height="12" rx="2" /><circle cx="16" cy="12" r="1.5" /></svg>,
+    plus: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14m7-7H5" /></svg>,
+};
 
 const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, purchaseOrders, supplierInvoices, supplierPayments, onAddSupplier, onUpdateSupplier, onDeleteSupplier, permissions, settings }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -38,16 +37,52 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, purchaseOrders
 
     const canManage = permissions.includes('manage_suppliers');
 
+    const filteredSuppliers = useMemo(() => {
+        return suppliers.filter((supplier) => {
+            const query = searchTerm.toLowerCase();
+            return (
+                supplier.name.toLowerCase().includes(query) ||
+                (supplier.businessName && supplier.businessName.toLowerCase().includes(query)) ||
+                supplier.contact.toLowerCase().includes(query)
+            );
+        });
+    }, [suppliers, searchTerm]);
+
+    const supplierBalances = useMemo(() => {
+        const map: Record<string, number> = {};
+        suppliers.forEach((supplier) => { map[supplier.id] = 0; });
+        supplierInvoices.forEach((invoice) => {
+            if (invoice.status !== 'Paid') {
+                map[invoice.supplierId] = (map[invoice.supplierId] || 0) + (invoice.totalAmount - invoice.paidAmount);
+            }
+        });
+        return map;
+    }, [supplierInvoices, suppliers]);
+
+    const summary = useMemo(() => {
+        const totalOwed = Object.values(supplierBalances).reduce((sum, value) => sum + value, 0);
+        const unpaidInvoices = supplierInvoices.filter((invoice) => invoice.status !== 'Paid').length;
+        const topSuppliersData = suppliers
+            .map((supplier) => ({
+                name: supplier.businessName || supplier.name,
+                value: supplierBalances[supplier.id] || 0,
+            }))
+            .filter((supplier) => supplier.value > 0)
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 5);
+
+        return { totalOwed, unpaidInvoices, topSuppliersData };
+    }, [supplierBalances, supplierInvoices, suppliers]);
+
+    const chartColors = theme === 'dark'
+        ? ['#34d399', '#60a5fa', '#fde047', '#c4b5fd', '#fca5a5']
+        : ['#10b981', '#3b82f6', '#facc15', '#a78bfa', '#f87171'];
+
     const handleOpenModal = (supplier?: Supplier) => {
         setEditingSupplier(supplier);
         setIsModalOpen(true);
     };
 
-    const handleSaveSupplier = async (supplierData: Omit<Supplier, 'id'> | Supplier) => {
-        await onAddSupplier(supplierData as Omit<Supplier, 'id'>);
-        setIsModalOpen(false);
-    };
-    
     const handleUpdateAndSave = async (supplierData: Omit<Supplier, 'id'> | Supplier) => {
         if ('id' in supplierData) {
             await onUpdateSupplier(supplierData);
@@ -55,74 +90,38 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, purchaseOrders
             await onAddSupplier(supplierData);
         }
         setIsModalOpen(false);
-    }
-
+    };
 
     const handleDelete = async () => {
-        if(deletingSupplier) {
+        if (deletingSupplier) {
             await onDeleteSupplier(deletingSupplier.id);
             setDeletingSupplier(null);
         }
     };
 
-    const filteredSuppliers = useMemo(() => {
-        return suppliers.filter(s =>
-            s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (s.businessName && s.businessName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-            s.contact.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-    }, [suppliers, searchTerm]);
-
-    const { totalOwed, topSuppliersData } = useMemo(() => {
-        const supplierBalances: { [id: string]: { name: string; value: number } } = {};
-
-        suppliers.forEach(s => {
-            supplierBalances[s.id] = { name: s.businessName || s.name, value: 0 };
-        });
-
-        supplierInvoices.forEach(inv => {
-            if (supplierBalances[inv.supplierId] && inv.status !== 'Paid') {
-                supplierBalances[inv.supplierId].value += inv.totalAmount - inv.paidAmount;
-            }
-        });
-
-        const total = Object.values(supplierBalances).reduce((sum, s) => sum + s.value, 0);
-        const top = Object.values(supplierBalances)
-            .filter(s => s.value > 0)
-            .sort((a, b) => b.value - a.value)
-            .slice(0, 5);
-
-        return { totalOwed: total, topSuppliersData: top };
-    }, [supplierInvoices, suppliers]);
-    
-    const lightColors = ['#10b981', '#3b82f6', '#facc15', '#a78bfa', '#f87171'];
-    const darkColors = ['#34d399', '#60a5fa', '#fde047', '#c4b5fd', '#fca5a5'];
-    const chartColors = theme === 'dark' ? darkColors : lightColors;
-
     if (viewingStatementFor) {
         return (
-            <SupplierStatementView 
+            <SupplierStatementView
                 supplier={viewingStatementFor}
-                purchaseOrders={purchaseOrders.filter(p => p.supplierId === viewingStatementFor.id)}
-                supplierInvoices={supplierInvoices.filter(i => i.supplierId === viewingStatementFor.id)}
-                supplierPayments={supplierPayments.filter(p => supplierInvoices.some(i => i.id === p.invoiceId && i.supplierId === viewingStatementFor.id))}
+                purchaseOrders={purchaseOrders.filter((purchaseOrder) => purchaseOrder.supplierId === viewingStatementFor.id)}
+                supplierInvoices={supplierInvoices.filter((invoice) => invoice.supplierId === viewingStatementFor.id)}
+                supplierPayments={supplierPayments.filter((payment) => supplierInvoices.some((invoice) => invoice.id === payment.invoiceId && invoice.supplierId === viewingStatementFor.id))}
                 settings={settings}
                 onBack={() => setViewingStatementFor(null)}
             />
-        )
+        );
     }
 
     return (
-        <div className="p-4 md:p-8 h-full overflow-y-auto">
-             <AnimatePresence>
-                {isModalOpen && (
-                    <SupplierModal
-                        onClose={() => setIsModalOpen(false)}
-                        onSave={handleUpdateAndSave}
-                        supplier={editingSupplier}
-                    />
-                )}
-                 {deletingSupplier && (
+        <ModernShell
+            eyebrow="Vendor Control"
+            title="Suppliers"
+            description="Monitor supplier exposure, review unpaid balances, and manage vendor records with the same modern dashboard language."
+            actions={canManage ? <ModernButton onClick={() => handleOpenModal()}>{icons.plus}Add Supplier</ModernButton> : undefined}
+        >
+            <AnimatePresence>
+                {isModalOpen && <SupplierModal onClose={() => setIsModalOpen(false)} onSave={handleUpdateAndSave} supplier={editingSupplier} />}
+                {deletingSupplier && (
                     <ConfirmationModal
                         title={`Delete ${deletingSupplier.name}?`}
                         message="Are you sure you want to permanently delete this supplier? This action cannot be undone."
@@ -133,90 +132,85 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({ suppliers, purchaseOrders
                     />
                 )}
             </AnimatePresence>
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-foreground dark:text-dark-foreground">Suppliers</h1>
-                 {canManage && (
-                    <motion.button
-                        onClick={() => handleOpenModal()}
-                        whileTap={{ scale: 0.95 }}
-                        className="bg-primary text-primary-content font-bold px-4 py-2 rounded-xl transition-shadow shadow-clay dark:shadow-clay-dark active:shadow-clay-inset dark:active:shadow-clay-dark-inset flex items-center"
-                    >
-                        Add Supplier
-                    </motion.button>
-                )}
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <ModernStatCard title="Total Suppliers" value={suppliers.length} subtitle="Vendors currently on file" icon={icons.supplier} accent="violet" />
+                <ModernStatCard title="Outstanding Balance" value={`Ksh ${summary.totalOwed.toFixed(2)}`} subtitle="Open amount still owed to suppliers" icon={icons.wallet} accent="rose" />
+                <ModernStatCard title="Unpaid Invoices" value={summary.unpaidInvoices} subtitle="Supplier invoices not yet settled" icon={icons.invoice} accent="amber" />
+                <ModernStatCard title="With Exposure" value={summary.topSuppliersData.length} subtitle="Suppliers currently carrying open balances" icon={icons.supplier} accent="blue" />
             </div>
 
-             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                 <div className="lg:col-span-1 space-y-4">
-                     <StatCard title="Total Suppliers" value={String(suppliers.length)} />
-                     <StatCard title="Total Amount Owed" value={`Ksh ${totalOwed.toFixed(2)}`} />
-                 </div>
-                 <div className="lg:col-span-2 bg-card dark:bg-dark-card p-4 rounded-xl shadow-sm border border-border dark:border-dark-border">
-                     <h3 className="font-bold text-foreground dark:text-dark-foreground mb-2">Top 5 Suppliers by Amount Owed</h3>
-                     {topSuppliersData.length > 0 ? (
-                         <ResponsiveContainer width="100%" height={200}>
-                             <PieChart>
-                                 <Pie data={topSuppliersData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80}>
-                                     {topSuppliersData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={chartColors[index % chartColors.length]} />
-                                    ))}
-                                 </Pie>
-                                 <Tooltip formatter={(value) => `Ksh ${Number(value).toFixed(2)}`} />
-                                 <Legend />
-                             </PieChart>
-                         </ResponsiveContainer>
-                     ) : (
-                        <div className="flex items-center justify-center h-full text-foreground-muted dark:text-dark-foreground-muted">No outstanding balances.</div>
-                     )}
-                 </div>
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+                <ModernPanel>
+                    <div className="mb-5">
+                        <h2 className="text-lg font-semibold text-slate-950 dark:text-white">Search Suppliers</h2>
+                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Filter by supplier name, business name, or contact number.</p>
+                    </div>
+                    <ModernSearchInput value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search by name, business, or contact..." />
+                </ModernPanel>
+
+                <ModernPanel>
+                    <div className="mb-5">
+                        <h2 className="text-lg font-semibold text-slate-950 dark:text-white">Top Exposure</h2>
+                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Largest outstanding supplier balances.</p>
+                    </div>
+                    {summary.topSuppliersData.length > 0 ? (
+                        <div className="h-64">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie data={summary.topSuppliersData} dataKey="value" nameKey="name" innerRadius={52} outerRadius={82} paddingAngle={4}>
+                                        {summary.topSuppliersData.map((entry, index) => <Cell key={entry.name} fill={chartColors[index % chartColors.length]} />)}
+                                    </Pie>
+                                    <Tooltip formatter={(value) => `Ksh ${Number(value).toFixed(2)}`} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                    ) : (
+                        <ModernEmptyState title="No outstanding balances." description="Supplier exposure will appear here once unpaid invoices exist." />
+                    )}
+                </ModernPanel>
             </div>
 
-            <div className="mb-4">
-                 <input
-                    type="text"
-                    placeholder="Search by name, business, or contact..."
-                    className="w-full max-w-sm px-4 py-2 rounded-lg border border-border dark:border-dark-border bg-card dark:bg-dark-card focus:outline-none focus:ring-2 focus:ring-primary"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
-            </div>
-
-            <div className="bg-card dark:bg-dark-card rounded-xl shadow-sm overflow-x-auto">
-                <table className="w-full text-sm text-left text-foreground-muted dark:text-dark-foreground-muted">
-                    <thead className="text-xs text-foreground dark:text-dark-foreground uppercase bg-muted dark:bg-dark-muted">
+            <ModernTableShell title="Supplier Ledger" description="Open statements, update vendor records, and review live balances.">
+                <table className="w-full text-sm">
+                    <thead className="bg-slate-50/80 text-left text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:bg-slate-950/60 dark:text-slate-400">
                         <tr>
-                            <th scope="col" className="px-6 py-3 font-bold">Business Name</th>
-                            <th scope="col" className="px-6 py-3 font-bold">Contact Person</th>
-                            <th scope="col" className="px-6 py-3 font-bold">Phone</th>
-                            <th scope="col" className="px-6 py-3 font-bold">Amount Owed</th>
-                            <th scope="col" className="px-6 py-3"><span className="sr-only">Actions</span></th>
+                            <th className="px-6 py-4">Business Name</th>
+                            <th className="px-6 py-4">Contact Person</th>
+                            <th className="px-6 py-4">Phone</th>
+                            <th className="px-6 py-4">Amount Owed</th>
+                            <th className="px-6 py-4 text-right">Actions</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {filteredSuppliers.map(s => {
-                            const amountOwed = topSuppliersData.find(ts => ts.name === (s.businessName || s.name))?.value || 0;
+                    <tbody className="divide-y divide-slate-200/80 dark:divide-white/10">
+                        {filteredSuppliers.map((supplier) => {
+                            const amountOwed = supplierBalances[supplier.id] || 0;
                             return (
-                                <tr key={s.id} className="border-b dark:border-dark-border hover:bg-muted dark:hover:bg-dark-muted">
-                                    <td className="px-6 py-4 font-semibold text-foreground dark:text-dark-foreground">{s.businessName || s.name}</td>
-                                    <td className="px-6 py-4">{s.name}</td>
-                                    <td className="px-6 py-4">{s.contact}</td>
-                                    <td className={`px-6 py-4 font-mono font-semibold ${amountOwed > 0 ? 'text-danger' : ''}`}>{amountOwed.toFixed(2)}</td>
-                                    <td className="px-6 py-4 text-right space-x-4">
-                                        <button onClick={() => setViewingStatementFor(s)} className="font-medium text-secondary hover:underline">View Statement</button>
-                                        {canManage && (
-                                            <>
-                                                <button onClick={() => handleOpenModal(s)} className="font-medium text-primary hover:underline">Edit</button>
-                                                <button onClick={() => setDeletingSupplier(s)} className="font-medium text-danger hover:underline">Delete</button>
-                                            </>
-                                        )}
+                                <tr key={supplier.id} className="transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-950/45">
+                                    <td className="px-6 py-4 font-semibold text-slate-900 dark:text-white">{supplier.businessName || supplier.name}</td>
+                                    <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{supplier.name}</td>
+                                    <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{supplier.contact}</td>
+                                    <td className={`px-6 py-4 font-semibold ${amountOwed > 0 ? 'text-rose-600 dark:text-rose-300' : 'text-slate-900 dark:text-white'}`}>{amountOwed.toFixed(2)}</td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex justify-end gap-2">
+                                            <ModernButton variant="secondary" onClick={() => setViewingStatementFor(supplier)} className="px-3 py-2">View Statement</ModernButton>
+                                            {canManage ? <ModernButton variant="secondary" onClick={() => handleOpenModal(supplier)} className="px-3 py-2">Edit</ModernButton> : null}
+                                            {canManage ? <ModernButton variant="danger" onClick={() => setDeletingSupplier(supplier)} className="px-3 py-2">Delete</ModernButton> : null}
+                                        </div>
                                     </td>
                                 </tr>
-                            )
+                            );
                         })}
                     </tbody>
                 </table>
-            </div>
-        </div>
+
+                {filteredSuppliers.length === 0 && (
+                    <div className="p-6">
+                        <ModernEmptyState title="No suppliers found." description="Adjust the search or create a new supplier record." />
+                    </div>
+                )}
+            </ModernTableShell>
+        </ModernShell>
     );
 };
 

@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Patch,
+  Put,
   Param,
   Delete,
   UseGuards,
@@ -114,6 +115,32 @@ export class ProductsController {
     @Body() updateProductDto: UpdateProductDto,
   ) {
     return this.productsService.update(id, organizationId, updateProductDto);
+  }
+
+  // PUT alias — frontend sends PUT
+  @Put(':id')
+  @Roles('admin', 'manager')
+  updatePut(
+    @Param('id') id: string,
+    @CurrentUser('organizationId') organizationId: string,
+    @Body() updateProductDto: UpdateProductDto,
+  ) {
+    return this.productsService.update(id, organizationId, updateProductDto);
+  }
+
+  @Post('import')
+  @Roles('admin', 'manager')
+  @ApiOperation({ summary: 'Bulk import products' })
+  async importProducts(
+    @CurrentUser('organizationId') organizationId: string,
+    @Body() body: { products: any[] },
+  ) {
+    const results = await Promise.allSettled(
+      (body.products || []).map((p: any) => this.productsService.create(organizationId, p)),
+    );
+    const succeeded = results.filter(r => r.status === 'fulfilled').length;
+    const failed = results.filter(r => r.status === 'rejected').length;
+    return { succeeded, failed, total: results.length };
   }
 
   @Delete(':id')

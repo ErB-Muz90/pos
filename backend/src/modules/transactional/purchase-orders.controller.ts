@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } fro
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { TenantResourceGuard, TenantModel } from '../../common/guards/tenant-resource.guard';
 import { PurchaseOrdersService } from './purchase-orders.service';
 
 @ApiTags('purchase-orders')
@@ -22,12 +23,23 @@ export class PurchaseOrdersController {
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() dto: any) {
-    return this.svc.update(id, dto);
+  @UseGuards(TenantResourceGuard)
+  @TenantModel('purchaseOrder')
+  update(@Param('id') id: string, @Body() dto: any, @CurrentUser('organizationId') orgId: string) {
+    return this.svc.update(id, dto, orgId);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.svc.remove(id);
+  @UseGuards(TenantResourceGuard)
+  @TenantModel('purchaseOrder')
+  remove(@Param('id') id: string, @CurrentUser('organizationId') orgId: string) {
+    return this.svc.remove(id, orgId);
+  }
+
+  @Post(':id/receive')
+  @UseGuards(TenantResourceGuard)
+  @TenantModel('purchaseOrder')
+  receive(@Param('id') id: string, @Body() dto: any, @CurrentUser('organizationId') orgId: string) {
+    return this.svc.receive(id, orgId, dto.items ?? []);
   }
 }

@@ -1,3 +1,6 @@
+# Super admin portal — serve as-is, never rewrite
+/admin/*  /admin/:splat  200
+
 # SPA redirect for client-side routing
 /*    /index.html   200
 

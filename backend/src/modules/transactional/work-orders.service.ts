@@ -32,8 +32,8 @@ export class WorkOrdersService {
     return this.prisma.workOrder.create({ data: { ...dto, organizationId, woNumber } });
   }
 
-  async update(id: string, dto: any) {
-    const wo = await this.prisma.workOrder.findUnique({ where: { id } });
+  async update(id: string, dto: any, organizationId: string) {
+    const wo = await this.prisma.workOrder.findUnique({ where: { id, organizationId } });
     if (!wo) throw new BadRequestException('Work order not found');
 
     const newStatus: string | undefined = dto.status;
@@ -49,7 +49,7 @@ export class WorkOrdersService {
 
       // Fix 4 — block close if balance due > 0
       if (newStatus === 'Closed') {
-        const balanceDue = Number(dto.balanceDue ?? wo.balanceDue ?? 0);
+        const balanceDue = Number(dto.balanceDue ?? (wo as any).balanceDue ?? 0);
         if (balanceDue > 0) {
           throw new BadRequestException(
             `Cannot close work order with outstanding balance of KES ${balanceDue.toFixed(2)}`,
