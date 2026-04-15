@@ -35,6 +35,8 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, onForgotPassword, onNavi
         setIsLoading(false);
     };
 
+    const inputClasses = "appearance-none block w-full px-4 py-3 rounded-lg border border-white/15 bg-white/5 text-white placeholder:text-white/50 focus:border-amber-400/60 focus:outline-none";
+
     return (
         <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 auth-background">
             <motion.div 
@@ -61,7 +63,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, onForgotPassword, onNavi
 
                         <form className="mt-6 space-y-6" onSubmit={handleSubmit}>
                             <motion.div variants={itemVariants}>
-                                <label htmlFor="username" className="block text-sm font-medium text-foreground dark:text-dark-foreground">
+                                <label htmlFor="username" className="block text-sm font-medium text-white">
                                     Admin Email
                                 </label>
                                 <div className="mt-1">
@@ -74,13 +76,13 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, onForgotPassword, onNavi
                                         placeholder="Enter your admin email"
                                         value={username}
                                         onChange={(e) => setUsername(e.target.value)}
-                                        className="appearance-none block w-full px-4 py-3 rounded-lg bg-background/50 dark:bg-dark-background/50 border border-border dark:border-dark-border"
+                                        className={inputClasses}
                                     />
                                 </div>
                             </motion.div>
 
                             <motion.div variants={itemVariants}>
-                                <label htmlFor="password"className="block text-sm font-medium text-foreground dark:text-dark-foreground">
+                                <label htmlFor="password"className="block text-sm font-medium text-white">
                                     Password
                                 </label>
                                 <div className="mt-1">
@@ -93,7 +95,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, onForgotPassword, onNavi
                                         placeholder="Enter your password"
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
-                                        className="appearance-none block w-full px-4 py-3 rounded-lg bg-background/50 dark:bg-dark-background/50 border border-border dark:border-dark-border"
+                                        className={inputClasses}
                                     />
                                 </div>
                             </motion.div>
@@ -108,7 +110,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, onForgotPassword, onNavi
                                         onChange={(e) => setRememberMe(e.target.checked)}
                                         className="h-4 w-4 text-primary focus:ring-primary border-border rounded"
                                     />
-                                    <label htmlFor="remember-me" className="ml-2 block text-sm text-foreground dark:text-dark-foreground">
+                                    <label htmlFor="remember-me" className="ml-2 block text-sm text-white">
                                         Remember me
                                     </label>
                                 </div>

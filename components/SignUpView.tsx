@@ -39,13 +39,13 @@ const InputField: React.FC<{
     rightSlot?: React.ReactNode;
 }> = ({ id, label, type = 'text', placeholder, value, onChange, required, autoComplete, rightSlot }) => (
     <div>
-        <label htmlFor={id} className="block text-sm font-medium text-foreground dark:text-dark-foreground mb-1">{label}</label>
+        <label htmlFor={id} className="mb-1 block text-sm font-medium text-white">{label}</label>
         <div className="relative">
             <input
                 id={id} type={type} placeholder={placeholder} required={required}
                 autoComplete={autoComplete} value={value}
                 onChange={e => onChange(e.target.value)}
-                className="block w-full px-3 py-2 border border-border dark:border-dark-border rounded-xl shadow-sm placeholder-foreground-muted dark:placeholder-dark-foreground-muted focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-dark-primary sm:text-sm bg-card dark:bg-dark-background text-foreground dark:text-dark-foreground"
+                className="block w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-white shadow-sm placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-primary sm:text-sm"
             />
             {rightSlot && <div className="absolute inset-y-0 right-0 pr-3 flex items-center">{rightSlot}</div>}
         </div>
@@ -93,8 +93,8 @@ const SignUpView: React.FC<SignUpViewProps> = ({ onSignUp, onNavigateToLogin }) 
                 <div className="bg-card dark:bg-dark-card py-8 px-4 shadow-xl rounded-2xl sm:px-10 border border-border dark:border-dark-border">
                     {/* Header */}
                     <div className="mb-5 text-center">
-                        <h2 className="text-3xl font-extrabold text-foreground dark:text-dark-foreground">Welcome to Banduka POS™</h2>
-                        <p className="mt-1 text-sm text-foreground-muted dark:text-dark-foreground-muted">
+                        <h2 className="text-3xl font-extrabold text-white">Welcome to Banduka POS™</h2>
+                        <p className="mt-1 text-sm text-white/70">
                             Let's get your business set up. Built by Eruns Technologies.
                         </p>
                     </div>
@@ -102,7 +102,7 @@ const SignUpView: React.FC<SignUpViewProps> = ({ onSignUp, onNavigateToLogin }) 
                     {/* Auth toggle */}
                     <div className="relative flex bg-muted dark:bg-dark-muted p-1 rounded-xl mb-5">
                         <motion.div layoutId="auth-toggle" className="absolute h-full w-1/2 bg-card dark:bg-dark-card rounded-lg shadow-sm" style={{ right: 0 }} transition={{ type: 'spring', stiffness: 300, damping: 30 }} />
-                        <button onClick={onNavigateToLogin} className="relative w-1/2 py-2 text-sm font-semibold text-foreground-muted dark:text-dark-foreground-muted rounded-lg z-10">Sign In</button>
+                        <button onClick={onNavigateToLogin} className="relative z-10 w-1/2 rounded-lg py-2 text-sm font-semibold text-white/60">Sign In</button>
                         <button className="relative w-1/2 py-2 text-sm font-semibold text-primary dark:text-dark-primary rounded-lg z-10">Sign Up</button>
                     </div>
 
@@ -119,7 +119,7 @@ const SignUpView: React.FC<SignUpViewProps> = ({ onSignUp, onNavigateToLogin }) 
                     <form onSubmit={handleSubmit} className="space-y-5">
                         {/* Section 1 */}
                         <fieldset className="space-y-3">
-                            <legend className="text-xs font-bold uppercase tracking-widest text-foreground-muted dark:text-dark-foreground-muted">1. Your Business</legend>
+                            <legend className="text-xs font-bold uppercase tracking-widest text-white/60">1. Your Business</legend>
                             <InputField id="businessName" label="Business Name" placeholder="Your Company Name" value={businessName} onChange={setBusinessName} required />
                             <InputField id="location" label="Location" placeholder="e.g., Mombasa" value={location} onChange={setLocation} required />
                             <InputField id="phone" label="Phone Number" placeholder="e.g., 0712345678" value={phone} onChange={setPhone} required autoComplete="tel" />
@@ -127,14 +127,14 @@ const SignUpView: React.FC<SignUpViewProps> = ({ onSignUp, onNavigateToLogin }) 
 
                         {/* Section 2 */}
                         <fieldset className="space-y-3">
-                            <legend className="text-xs font-bold uppercase tracking-widest text-foreground-muted dark:text-dark-foreground-muted">2. Administrator Account</legend>
+                            <legend className="text-xs font-bold uppercase tracking-widest text-white/60">2. Administrator Account</legend>
                             <InputField id="email" label="Admin Email" type="email" placeholder="admin@yourbusiness.com" value={email} onChange={setEmail} required autoComplete="email" />
                             <InputField
                                 id="password" label="Admin Password" type={showPassword ? 'text' : 'password'}
                                 placeholder="Min. 6 characters" value={password} onChange={setPassword}
                                 required autoComplete="new-password"
                                 rightSlot={
-                                    <button type="button" onClick={() => setShowPassword(p => !p)} className="text-foreground-muted hover:text-foreground">
+                                    <button type="button" onClick={() => setShowPassword(p => !p)} className="text-white/60 hover:text-white">
                                         {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                                     </button>
                                 }
@@ -142,7 +142,7 @@ const SignUpView: React.FC<SignUpViewProps> = ({ onSignUp, onNavigateToLogin }) 
                             {password && (
                                 <div className="space-y-1">
                                     <div className="flex justify-between text-xs">
-                                        <span className="text-foreground-muted dark:text-dark-foreground-muted">Password Strength</span>
+                                        <span className="text-white/60">Password Strength</span>
                                         <span className={`font-semibold ${passwordStrength.color.replace('bg-', 'text-')}`}>{passwordStrength.label}</span>
                                     </div>
                                     <div className="w-full bg-muted dark:bg-dark-muted rounded-full h-1.5">
@@ -169,11 +169,11 @@ const SignUpView: React.FC<SignUpViewProps> = ({ onSignUp, onNavigateToLogin }) 
                         </motion.button>
                     </form>
 
-                    <div className="mt-5 text-center space-y-1 text-xs text-foreground-muted dark:text-dark-foreground-muted">
+                    <div className="mt-5 space-y-1 text-center text-xs text-white/60">
                         <p>
-                            <a href="#" className="underline hover:text-foreground">Terms of Service</a>
+                            <a href="#" className="underline hover:text-white">Terms of Service</a>
                             {' · '}
-                            <a href="#" className="underline hover:text-foreground">Privacy Policy</a>
+                            <a href="#" className="underline hover:text-white">Privacy Policy</a>
                         </p>
                         <p>
                             Already have an account?{' '}

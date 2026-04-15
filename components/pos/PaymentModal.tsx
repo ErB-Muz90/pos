@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CartItem, SaleData, Payment, Customer, Settings } from '../../types';
 import { calculateCartTotals } from '../../utils/vatCalculator';
+import { ICONS } from '../../constants';
 
 interface PaymentModalProps {
     cartItems: CartItem[];
@@ -162,12 +163,19 @@ const PaymentModal = ({ cartItems, discount, onClose, onCompleteSale, customer, 
         { type: 'Card', name: 'Card' },
     ];
 
+    const paymentIcons: Record<PaymentType, ReactNode> = {
+        Cash: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="6" width="18" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /></svg>,
+        'M-Pesa': React.cloneElement(ICONS.mpesa, { className: 'h-4 w-4' }),
+        Card: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18M7 15h4" /></svg>,
+        Split: null,
+    };
+
     const Keypad = ({ onKeyPress }: { onKeyPress: (key: string) => void }) => {
         const keys = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0', '⌫'];
         return (
             <div className="grid grid-cols-3 gap-2">
                 {keys.map(key => (
-                    <motion.button key={key} type="button" whileTap={{ scale: 0.95 }} onClick={() => onKeyPress(key)} className="bg-muted/50 dark:bg-dark-muted/50 text-foreground dark:text-dark-foreground font-bold py-4 rounded-xl text-xl hover:bg-border dark:hover:bg-dark-border transition-colors shadow-clay active:shadow-clay-inset">
+                    <motion.button key={key} type="button" whileTap={{ scale: 0.95 }} onClick={() => onKeyPress(key)} className="rounded-xl bg-[#17191f] py-4 text-xl font-bold text-white shadow-[8px_8px_18px_rgba(0,0,0,0.42),-4px_-4px_10px_rgba(255,255,255,0.02)] transition-colors hover:text-amber-200">
                         {key}
                     </motion.button>
                 ))}
@@ -190,7 +198,7 @@ const PaymentModal = ({ cartItems, discount, onClose, onCompleteSale, customer, 
         return (
             <div className="grid grid-cols-4 gap-2">
                 {notes.map(note => (
-                    <motion.button key={note} type="button" whileTap={{ scale: 0.95 }} onClick={() => onAdd(note)} className="bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 font-bold py-3 rounded-xl text-sm hover:bg-emerald-200 dark:hover:bg-emerald-800 transition-colors shadow-clay active:shadow-clay-inset">
+                    <motion.button key={note} type="button" whileTap={{ scale: 0.95 }} onClick={() => onAdd(note)} className="rounded-xl bg-[#17191f] py-3 text-sm font-bold text-white shadow-[8px_8px_18px_rgba(0,0,0,0.42),-4px_-4px_10px_rgba(255,255,255,0.02)] transition-colors hover:text-amber-200">
                         Ksh {note}
                     </motion.button>
                 ))}
@@ -251,25 +259,26 @@ const PaymentModal = ({ cartItems, discount, onClose, onCompleteSale, customer, 
                     <div className="space-y-4 text-center">
                         {stkState === 'prompting' && (
                             <>
-                                <p className="text-sm text-foreground/70 dark:text-dark-foreground/70">Enter customer's phone number to trigger STK push.</p>
+                                <div className="flex justify-center text-emerald-400">{React.cloneElement(ICONS.mpesa, { className: 'h-12 w-12' })}</div>
+                                <p className="text-sm text-white/65">Enter customer's phone number to trigger STK push.</p>
                                 <input
                                     type="tel"
                                     value={phoneNumber}
                                     onChange={(e) => setPhoneNumber(e.target.value)}
-                                    className="block w-full text-center text-lg font-bold p-2 bg-background dark:bg-dark-background border border-border dark:border-dark-border rounded-xl shadow-sm"
+                                    className="block w-full rounded-xl border border-white/8 bg-[#0f1116] p-3 text-center text-lg font-bold text-white"
                                     placeholder="0712345678"
                                 />
-                                <motion.button whileTap={{scale:0.95}} onClick={handleStkPush} className="w-full bg-accent dark:bg-dark-accent text-white font-bold py-2 rounded-xl shadow-clay active:shadow-clay-inset">Send STK Push</motion.button>
+                                <motion.button whileTap={{scale:0.95}} onClick={handleStkPush} className="w-full rounded-xl bg-emerald-500 py-3 font-bold text-white shadow-[0_0_20px_rgba(16,185,129,0.24)]">Send STK Push</motion.button>
                             </>
                         )}
                          {(stkState === 'sending' || stkState === 'waiting') && (
                              <div className="flex flex-col items-center p-4 space-y-2">
                                  <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} className="w-8 h-8 border-4 border-accent dark:border-dark-accent border-t-transparent rounded-full" />
-                                 <p className="font-semibold">{stkState === 'sending' ? 'Sending request to phone...' : 'Waiting for customer to enter M-Pesa PIN...'}</p>
+                                <p className="font-semibold text-white">{stkState === 'sending' ? 'Sending request to phone...' : 'Waiting for customer to enter M-Pesa PIN...'}</p>
                              </div>
                          )}
                          {stkState === 'success' && (
-                             <div className="p-4 bg-accent/10 text-accent dark:text-dark-accent rounded-xl space-y-1">
+                             <div className="space-y-1 rounded-xl bg-emerald-500/10 p-4 text-emerald-300">
                                  <h4 className="font-bold">Payment Successful!</h4>
                                  <p className="text-sm">Ref: {transactionCode}</p>
                              </div>
@@ -284,7 +293,7 @@ const PaymentModal = ({ cartItems, discount, onClose, onCompleteSale, customer, 
                     </div>
                 );
             case 'Card':
-                return <div className="text-center p-4 bg-accent/10 dark:bg-dark-accent/20 text-accent dark:text-dark-accent rounded-xl font-semibold">Please use your card terminal to process Ksh {totalAfterPoints.toFixed(2)}.</div>;
+                return <div className="rounded-xl bg-[#17191f] p-4 text-center font-semibold text-white">Please use your card terminal to process Ksh {totalAfterPoints.toFixed(2)}.</div>;
             default:
                 return null;
         }
@@ -295,7 +304,7 @@ const PaymentModal = ({ cartItems, discount, onClose, onCompleteSale, customer, 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
             onClick={onClose}
         >
             <motion.div
@@ -303,44 +312,44 @@ const PaymentModal = ({ cartItems, discount, onClose, onCompleteSale, customer, 
                 animate={{ scale: 1, y: 0, opacity: 1 }}
                 exit={{ scale: 0.9, y: 20, opacity: 0 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                className="bg-white/50 dark:bg-dark-card/50 backdrop-blur-2xl border border-white/20 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col"
+                className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-2xl border border-white/8 bg-[#111317] shadow-2xl backdrop-blur-2xl"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="flex-shrink-0 flex justify-between items-center p-6 border-b border-white/20 dark:border-white/10">
-                    <h2 className="text-2xl font-bold text-foreground dark:text-dark-foreground">Finalize Payment</h2>
-                    <button onClick={onClose} className="text-foreground/60 hover:text-foreground dark:text-dark-foreground/60 dark:hover:text-dark-foreground text-2xl">&times;</button>
+                <div className="flex flex-shrink-0 items-center justify-between border-b border-white/8 p-6">
+                    <h2 className="text-2xl font-bold text-white">Finalize Payment</h2>
+                    <button onClick={onClose} className="text-2xl text-white/50 hover:text-white">&times;</button>
                 </div>
 
                 <div className="flex-grow flex flex-col md:flex-row overflow-hidden">
                     {/* Left Side: Summary */}
-                    <div className="w-full md:w-1/3 border-b md:border-b-0 md:border-r border-white/20 dark:border-white/10 p-6 space-y-4 overflow-y-auto">
-                        <h3 className="font-bold text-lg">Order Summary</h3>
+                    <div className="w-full overflow-y-auto border-b border-white/8 p-6 space-y-4 md:w-1/3 md:border-b-0 md:border-r">
+                        <h3 className="text-lg font-bold text-white">Order Summary</h3>
                         <div className="space-y-2 text-sm">
-                            <div className="flex justify-between"><span className="text-foreground/70 dark:text-dark-foreground/70">Total (Pre-deposit)</span> <span className="font-mono">{totalCostBeforeDeposit.toFixed(2)}</span></div>
-                            {depositApplied > 0 && <div className="flex justify-between text-accent dark:text-dark-accent"><span>Deposit Paid</span> <span className="font-mono">- {depositApplied.toFixed(2)}</span></div>}
-                            <div className="flex justify-between"><span className="text-foreground/70 dark:text-dark-foreground/70">Balance Due</span> <span className="font-mono">{balanceDue.toFixed(2)}</span></div>
+                            <div className="flex justify-between"><span className="text-white/60">Total (Pre-deposit)</span> <span className="font-mono text-white">{totalCostBeforeDeposit.toFixed(2)}</span></div>
+                            {depositApplied > 0 && <div className="flex justify-between text-amber-300"><span>Deposit Paid</span> <span className="font-mono">- {depositApplied.toFixed(2)}</span></div>}
+                            <div className="flex justify-between"><span className="text-white/60">Balance Due</span> <span className="font-mono text-white">{balanceDue.toFixed(2)}</span></div>
                             
                             {settings.loyalty.enabled && customer.id !== 'cust001' && (
                                 <>
                                     <div className="pt-2 border-t border-white/20 dark:border-white/10"></div>
                                     <label className="block font-medium">Use Loyalty Points</label>
-                                    <p className="text-xs text-foreground/60 dark:text-dark-foreground/60">Balance: {customer.loyaltyPoints} pts (Max Value: Ksh {maxRedeemableValue.toFixed(2)})</p>
-                                    <input type="number" value={pointsToRedeem} onChange={(e) => setPointsToRedeem(e.target.value === '' ? '' : Math.max(0, Math.min(Number(e.target.value), customer.loyaltyPoints)))} className="w-full p-2 border rounded-lg bg-white/20 dark:bg-dark-background/50 border-white/20 dark:border-dark-border" />
-                                    {pointsValue > 0 && <div className="flex justify-between text-accent dark:text-dark-accent"><span>Points Value</span> <span className="font-mono">- {pointsValue.toFixed(2)}</span></div>}
+                                    <p className="text-xs text-white/45">Balance: {customer.loyaltyPoints} pts (Max Value: Ksh {maxRedeemableValue.toFixed(2)})</p>
+                                    <input type="number" value={pointsToRedeem} onChange={(e) => setPointsToRedeem(e.target.value === '' ? '' : Math.max(0, Math.min(Number(e.target.value), customer.loyaltyPoints)))} className="w-full rounded-lg border border-white/8 bg-[#0f1116] p-2 text-white" />
+                                    {pointsValue > 0 && <div className="flex justify-between text-amber-300"><span>Points Value</span> <span className="font-mono">- {pointsValue.toFixed(2)}</span></div>}
                                 </>
                             )}
                         </div>
-                        <div className="pt-4 border-t border-white/20 dark:border-white/10 text-2xl font-bold text-primary dark:text-dark-primary flex justify-between">
+                        <div className="flex justify-between border-t border-white/8 pt-4 text-2xl font-bold text-amber-300">
                             <span>To Pay</span>
                             <span className="font-mono">Ksh {totalAfterPoints.toFixed(2)}</span>
                         </div>
                     </div>
 
                     {/* Right Side: Payment Method */}
-                    <div className="w-full md:w-2/3 p-6 flex flex-col overflow-y-auto">
-                        <div className="flex bg-background/50 dark:bg-dark-background/50 p-1 rounded-xl mb-4">
+                    <div className="flex w-full flex-col overflow-y-auto p-6 md:w-2/3">
+                        <div className="mb-4 flex rounded-xl bg-[#0f1116] p-1">
                             {paymentButtons.map(btn => (
-                                <button key={btn.type} onClick={() => setPaymentType(btn.type)} className={`w-1/3 py-2 text-sm font-bold transition-colors rounded-lg ${paymentType === btn.type ? 'bg-card dark:bg-dark-card shadow text-primary dark:text-dark-primary' : 'text-foreground/70 dark:text-dark-foreground/70'}`}>{btn.name}</button>
+                                <button key={btn.type} onClick={() => setPaymentType(btn.type)} className={`flex w-1/3 items-center justify-center gap-2 rounded-lg py-2 text-sm font-bold transition-colors ${paymentType === btn.type ? 'bg-amber-500 text-black shadow-[0_0_18px_rgba(245,158,11,0.24)]' : 'text-white/60 hover:text-white'}`}>{paymentIcons[btn.type]}<span>{btn.name}</span></button>
                             ))}
                         </div>
                         <AnimatePresence mode="wait">
@@ -351,15 +360,15 @@ const PaymentModal = ({ cartItems, discount, onClose, onCompleteSale, customer, 
                     </div>
                 </div>
                 
-                <div className="flex-shrink-0 flex justify-between items-center p-4 border-t border-white/20 dark:border-white/10">
+                <div className="flex flex-shrink-0 items-center justify-between border-t border-white/8 p-4">
                      <div className="flex items-center">
-                        <input type="checkbox" id="autoPrint" checked={autoPrint} onChange={e => setAutoPrint(e.target.checked)} className="h-4 w-4 text-primary rounded border-border focus:ring-primary"/>
-                        <label htmlFor="autoPrint" className="ml-2 text-sm font-medium text-foreground dark:text-dark-foreground">Print receipt after sale</label>
+                        <input type="checkbox" id="autoPrint" checked={autoPrint} onChange={e => setAutoPrint(e.target.checked)} className="h-4 w-4 rounded border-white/10 text-amber-500 focus:ring-amber-500"/>
+                        <label htmlFor="autoPrint" className="ml-2 text-sm font-medium text-white/75">Print receipt after sale</label>
                     </div>
                     <motion.button 
                         onClick={handleComplete} 
                         disabled={(paymentType === 'M-Pesa' && stkState !== 'success') || (paymentType === 'Cash' && Number(cashReceived) < totalAfterPoints)}
-                        className="bg-primary text-primary-content font-bold py-3 px-8 rounded-xl text-lg transition-shadow shadow-clay dark:shadow-clay-dark active:shadow-clay-inset dark:active:shadow-clay-dark-inset disabled:bg-slate-400 dark:disabled:bg-slate-600"
+                        className="rounded-xl bg-amber-500 px-8 py-3 text-lg font-bold text-black transition-shadow shadow-[0_0_20px_rgba(245,158,11,0.24)] disabled:bg-slate-700 disabled:text-white/40"
                         whileTap={{ scale: 0.98 }}
                     >
                         Complete Sale

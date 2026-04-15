@@ -130,7 +130,7 @@ interface AppProps {
 // FIX: Changed to named export to fix module resolution error in AuthView.tsx
 export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, onDeleteUser, serverSettings }: AppProps) => {
     // --- Theming Hooks ---
-    const [theme] = useTheme();
+    const [theme, toggleTheme] = useTheme();
 
     // --- App State ---
     const [isAppLoading, setIsAppLoading] = useState(true);
@@ -503,6 +503,27 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                 // Server settings win over stale IndexedDB — deep merge server on top
                 if (serverSettings && Object.keys(serverSettings).length > 0) {
                     currentSettings = { ...currentSettings, ...serverSettings, id: currentSettings.id };
+                }
+
+                // Remove the legacy seeded tenant name so existing accounts stop
+                // inheriting platform branding in their dashboard and documents.
+                if (currentSettings.businessInfo?.name?.trim().toUpperCase() === 'ERUNS TECHNOLOGIES') {
+                    currentSettings = {
+                        ...currentSettings,
+                        businessInfo: {
+                            ...currentSettings.businessInfo,
+                            name: '',
+                        },
+                    };
+                    await db.saveItem('settings', currentSettings);
+                    if (canUseServerSync()) {
+                        pushToServer('PUT', '/settings', {
+                            businessInfo: {
+                                ...currentSettings.businessInfo,
+                                name: '',
+                            },
+                        });
+                    }
                 }
 
                 // Server-backed sessions may not persist the local-only setup flag.
@@ -2998,6 +3019,7 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
         payouts: expenses,
         supplierPayments,
         bankDeposits,
+        onNavigate: handleViewChange,
     };
 
 
@@ -3384,6 +3406,8 @@ export const App = ({ currentUser, onLogout, allUsers, onAddUser, onUpdateUser, 
                     isSyncing={isSyncing} 
                     queuedSalesCount={queuedSalesCount} 
                     onMenuClick={() => setIsSidebarOpen(prev => !prev)}
+                    onThemeToggle={toggleTheme}
+                    theme={theme}
                     currentUser={currentUser}
                     products={products}
                     settings={settings}

@@ -1,9 +1,10 @@
-const STATIC_CACHE_NAME = 'banduka-pos-static-v2';
-const RUNTIME_CACHE_NAME = 'banduka-pos-runtime-v2';
+const STATIC_CACHE_NAME = 'banduka-pos-static-v4';
+const RUNTIME_CACHE_NAME = 'banduka-pos-runtime-v4';
 const URLS_TO_CACHE = [
   '/',
   '/index.html',
   '/manifest.json',
+  '/favicon.svg',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png',
   // Note: esm.sh URLs are not pre-cached as they can change.
@@ -52,11 +53,11 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
   const isApiRequest = url.pathname.startsWith('/api/');
+  const isNavigationRequest = event.request.mode === 'navigate';
   const isStaticAsset =
     url.origin === self.location.origin &&
     (
       url.pathname === '/' ||
-      url.pathname.endsWith('.html') ||
       url.pathname.endsWith('.js') ||
       url.pathname.endsWith('.css') ||
       url.pathname.endsWith('.json') ||
@@ -66,6 +67,11 @@ self.addEventListener('fetch', (event) => {
     );
 
   if (isApiRequest) {
+    event.respondWith(networkFirst(event.request));
+    return;
+  }
+
+  if (isNavigationRequest) {
     event.respondWith(networkFirst(event.request));
     return;
   }

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="banduka-grad" x1="8%" y1="8%" x2="92%" y2="92%">
+      <stop offset="0%" stop-color="#8b5cf6" />
+      <stop offset="55%" stop-color="#a855f7" />
+      <stop offset="100%" stop-color="#4f46e5" />
+    </linearGradient>
+    <linearGradient id="banduka-glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.28" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+  <rect x="6" y="6" width="88" height="88" rx="26" fill="url(#banduka-grad)" />
+  <rect x="9" y="9" width="82" height="82" rx="23" fill="none" stroke="rgba(255,255,255,0.18)" />
+  <path d="M31 24h20.5c11.5 0 18.5 6.4 18.5 15.5 0 5.5-2.8 10-7.6 12.4 7 2 11.1 7.2 11.1 14.4 0 11.2-8.4 18.7-21 18.7H31V24Zm18.8 24.4c5.9 0 9.7-2.8 9.7-7.4 0-4.4-3.5-7.1-9.5-7.1h-8.3v14.5h8.1Zm2 26.9c6.9 0 11-3.1 11-8.4 0-5.2-4-8.3-10.8-8.3H41.7v16.7h10.1Z" fill="#fff" />
+  <circle cx="74" cy="26" r="5.5" fill="#34d399" stroke="#6d28d9" stroke-width="2.5" />
+  <path d="M19 16c9-7 21-11 36-11 14 0 28 4 39 13" fill="none" stroke="url(#banduka-glow)" stroke-linecap="round" stroke-width="7" />
+</svg>

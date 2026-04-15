@@ -2,8 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" href="data:image/svg+xml,%3csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%20100%20100%27%3e%3crect%20x=%270%27%20y=%270%27%20width=%27100%27%20height=%27100%27%20rx=%2720%27%20fill=%27%23FF6F00%27/%3e%3cpath%20d=%27M65%2050%20C%2075%2050%2c%2082.5%2042.5%2c%2082.5%2032.5%20C%2082.5%2022.5%2c%2075%2015%2c%2065%2015%20H%2030%20V%2050%20H%2065%20Z%27%20fill=%27white%27/%3e%3cpath%20d=%27M67.5%2085%20C%2077.5%2085%2c%2085%2077.5%2c%2085%2067.5%20C%2085%2057.5%2c%2077.5%2050%2c%2067.5%2050%20H%2030%20V%2085%20H%2067.5%20Z%27%20fill=%27white%27/%3e%3cpath%20d=%27M42%2062%20L%2050%2070%20L%2068%2052%27%20stroke=%27%23455A64%27%20stroke-width=%278%27%20stroke-linecap=%27round%27%20stroke-linejoin=%27round%27%20fill=%27none%27/%3e%3c/svg%3e">
-    <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Banduka POS™ - Point of Sale</title>
@@ -66,9 +68,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@700&display=swap" rel="stylesheet">
-    <link rel="manifest" href="manifest.json" />
-    <meta name="theme-color" content="#F8F9FA" media="(prefers-color-scheme: light)">
-    <meta name="theme-color" content="#181A1B" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#7c3aed">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Banduka POS™">
@@ -96,25 +97,25 @@
         --muted: 220 16% 93%;
       }
       .dark {
-        --primary: 30 100% 58%;
-        --primary-focus: 30 100% 62%;
-        --primary-content: 215 28% 17%;
-        --secondary: 210 16% 82%;
-        --secondary-content: 215 28% 17%;
-        --accent: 45 90% 68%;
-        --accent-focus: 45 90% 72%;
+        --primary: 39 96% 56%;
+        --primary-focus: 39 96% 50%;
+        --primary-content: 0 0% 100%;
+        --secondary: 215 14% 72%;
+        --secondary-content: 0 0% 100%;
+        --accent: 39 90% 62%;
+        --accent-focus: 39 90% 56%;
         
-        --success: 145 58% 65%;
-        --warning: 40 90% 65%;
-        --danger: 0 84% 70%;
+        --success: 152 72% 42%;
+        --warning: 39 96% 56%;
+        --danger: 0 84% 62%;
         
-        --background: 216 6% 11%; /* #181A1B */
-        --foreground: 210 17% 82%;
-        --foreground-muted: 210 10% 55%;
+        --background: 240 5% 6%; /* matte black */
+        --foreground: 210 20% 94%;
+        --foreground-muted: 215 12% 68%;
 
-        --card: 216 6% 16%;
-        --border: 210 8% 28%;
-        --muted: 216 6% 20%;
+        --card: 240 4% 10%;
+        --border: 240 4% 16%;
+        --muted: 240 4% 13%;
       }
 
       html, body, #root {
@@ -140,12 +141,13 @@
       .aurora-blob:nth-child(2) { width: 50vw; height: 50vw; top: 40%; left: 65%; background: hsl(var(--accent) / 0.1); animation: aurora-move-2 50s infinite alternate; }
       .aurora-blob:nth-child(3) { width: 35vw; height: 35vw; top: 70%; left: -5%; background: hsl(var(--primary) / 0.1); animation: aurora-move-3 40s infinite alternate; }
       .aurora-blob:nth-child(4) { width: 45vw; height: 45vw; top: 10%; left: 40%; background: hsl(var(--secondary) / 0.1); animation: aurora-move-4 55s infinite alternate; }
-      /* Dark Mode Aurora */
-      .dark .aurora-blob { mix-blend-mode: screen; }
-      .dark .aurora-blob:nth-child(1) { background: hsl(var(--primary) / 0.2); }
-      .dark .aurora-blob:nth-child(2) { background: hsl(var(--accent) / 0.1); }
-      .dark .aurora-blob:nth-child(3) { background: hsl(var(--primary) / 0.15); }
-      .dark .aurora-blob:nth-child(4) { background: hsl(var(--secondary) / 0.1); }
+      /* Dark mode stays matte black instead of aurora gradients */
+      .dark #aurora-container {
+        background-color: hsl(var(--background));
+      }
+      .dark .aurora-blob {
+        display: none;
+      }
 
       .dark ::placeholder { color: hsl(var(--foreground-muted) / 0.7); opacity: 1; }
 

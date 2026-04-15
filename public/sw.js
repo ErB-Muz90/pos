@@ -1,10 +1,11 @@
-const CACHE_NAME = 'banduka-pos-v3';
+const CACHE_NAME = 'banduka-pos-v5';
 // The files to cache will be determined by the Next.js build process.
 // A more robust PWA setup would use a library like 'next-pwa'.
 // This basic service worker is kept for simple offline page support.
 const URLS_TO_CACHE = [
   '/',
   '/manifest.json',
+  '/favicon.svg',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png',
 ];
@@ -40,7 +41,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Use a network-first strategy for dynamic Next.js content
+  // Always prefer the latest HTML shell after deploys.
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(() => caches.match('/'))

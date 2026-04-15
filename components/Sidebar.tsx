@@ -1,9 +1,8 @@
-
-
-import React, { ReactNode, ReactElement, useMemo } from 'react';
+import React, { ReactElement, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { View, User, Permission, Settings } from '../types';
 import { ICONS } from '../constants';
+import Logo from './Logo';
 
 interface SidebarProps {
     currentView: View;
@@ -15,50 +14,6 @@ interface SidebarProps {
     permissions: Permission[];
     settings: Settings;
 }
-
-// ── Logo ──────────────────────────────────────────────────────────────────────
-export const Logo: React.FC<{ layout?: 'horizontal' | 'vertical'; collapsed?: boolean }> = ({ layout = 'vertical', collapsed = false }) => {
-    const icon = (
-        <div className="relative flex-shrink-0">
-            <div className="absolute -inset-1 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 opacity-60 blur-md" />
-            <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 shadow-lg">
-                <div className="absolute inset-0 rounded-xl bg-gradient-to-tr from-white/20 to-transparent" />
-                <span className="text-base font-black text-white">B</span>
-                <div className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-indigo-600" />
-            </div>
-        </div>
-    );
-
-    if (layout === 'horizontal') {
-        return (
-            <div className="flex items-center gap-3">
-                {icon}
-                {!collapsed && (
-                    <div className="flex flex-col">
-                        <span className="text-base font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent leading-tight">
-                            Banduka POS™
-                        </span>
-                        <span className="text-[9px] tracking-widest text-white/40 uppercase">Point of Sale</span>
-                    </div>
-                )}
-            </div>
-        );
-    }
-
-    return (
-        <div className={`flex items-center gap-3 px-4 py-4 border-b border-white/10 ${collapsed ? 'justify-center' : ''}`}>
-            {icon}
-            {!collapsed && (
-                <motion.div initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col">
-                    <span className="text-base font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent leading-tight">
-                        Banduka POS™
-                    </span>
-                    <span className="text-[9px] tracking-widest text-white/40 uppercase">Point of Sale System</span>
-                </motion.div>
-            )}
-        </div>
-    );
-};
 
 // ── Menu items ────────────────────────────────────────────────────────────────
 const ALL_MENU_ITEMS: { view: View; label: string; icon: ReactElement; permission: Permission; badge?: string }[] = [
@@ -94,33 +49,45 @@ const NavItem: React.FC<{
     <div className="relative group">
         <motion.button
             onClick={onClick}
-            whileHover={{ x: collapsed ? 0 : 3 }}
-            whileTap={{ scale: 0.97 }}
-            className={`relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200 ${
+            whileHover={{
+                x: collapsed ? 0 : 4,
+                y: -1,
+                boxShadow: isActive
+                    ? 'inset 0 1px 0 rgba(255,255,255,0.06), 0 0 0 1px rgba(245,158,11,0.22), 0 0 24px rgba(245,158,11,0.18), 8px 8px 20px rgba(0,0,0,0.5), -6px -6px 16px rgba(255,255,255,0.03)'
+                    : '0 0 0 1px rgba(245,158,11,0.16), 0 0 20px rgba(245,158,11,0.12), 8px 8px 20px rgba(0,0,0,0.46), -6px -6px 16px rgba(255,255,255,0.025)',
+            }}
+            whileTap={{
+                scale: 0.985,
+                y: 0,
+                boxShadow: 'inset 6px 6px 14px rgba(0,0,0,0.58), inset -4px -4px 10px rgba(255,255,255,0.03)',
+            }}
+            className={`relative flex w-full items-center gap-3 overflow-hidden rounded-2xl px-3 py-3 text-sm transition-all duration-200 ${
                 collapsed ? 'justify-center' : ''
             } ${
                 isActive
-                    ? 'bg-gradient-to-r from-purple-500/20 to-indigo-500/20 text-white border border-purple-500/25 shadow-lg shadow-purple-500/5'
-                    : 'text-white/50 hover:bg-white/5 hover:text-white'
+                    ? 'border border-amber-500/25 bg-[linear-gradient(145deg,#181b22,#12141a)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_0_1px_rgba(245,158,11,0.18),0_0_22px_rgba(245,158,11,0.14),10px_10px_24px_rgba(0,0,0,0.52),-6px_-6px_16px_rgba(255,255,255,0.03)]'
+                    : 'border border-white/5 bg-[linear-gradient(145deg,#15181f,#0e1015)] text-white shadow-[8px_8px_20px_rgba(0,0,0,0.46),-6px_-6px_16px_rgba(255,255,255,0.025)] hover:text-white'
             }`}
         >
+            <div className={`absolute inset-y-2 left-0 w-[3px] rounded-r-full transition-all duration-200 ${isActive ? 'bg-amber-400 shadow-[0_0_14px_rgba(251,191,36,0.75)]' : 'bg-transparent group-hover:bg-amber-500/80 group-hover:shadow-[0_0_12px_rgba(245,158,11,0.45)]'}`} />
+            <div className={`pointer-events-none absolute inset-0 rounded-2xl transition-opacity duration-200 ${isActive ? 'bg-[radial-gradient(circle_at_right,_rgba(245,158,11,0.10),_transparent_42%)] opacity-100' : 'bg-[radial-gradient(circle_at_right,_rgba(245,158,11,0.08),_transparent_38%)] opacity-0 group-hover:opacity-100'}`} />
             {/* Active left bar */}
             {isActive && (
                 <motion.div
                     layoutId="activeBar"
-                    className="absolute left-0 h-7 w-0.5 rounded-r-full bg-gradient-to-b from-purple-400 to-indigo-500"
+                    className="absolute left-0 h-7 w-1 rounded-r-full bg-amber-300"
                 />
             )}
             {/* Icon */}
-            <span className={`flex-shrink-0 w-5 h-5 ${isActive ? 'text-purple-400' : ''}`}>
+            <span className={`relative h-5 w-5 flex-shrink-0 ${isActive ? 'text-amber-300' : 'text-white/80 group-hover:text-amber-200'}`}>
                 {React.cloneElement(item.icon, { className: 'w-5 h-5' })}
             </span>
             {/* Label + badge */}
             {!collapsed && (
                 <>
-                    <span className="flex-1 text-left font-medium truncate">{item.label}</span>
+                    <span className="relative flex-1 truncate text-left font-medium text-white">{item.label}</span>
                     {item.badge && (
-                        <span className="rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                        <span className="relative rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-1.5 py-0.5 text-[9px] font-bold text-white shadow-[0_0_14px_rgba(245,158,11,0.32)]">
                             {item.badge}
                         </span>
                     )}
@@ -129,7 +96,7 @@ const NavItem: React.FC<{
         </motion.button>
         {/* Tooltip when collapsed */}
         {collapsed && (
-            <div className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
+            <div className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg border border-amber-500/20 bg-[#16181f] px-2.5 py-1.5 text-xs text-white opacity-0 shadow-[0_0_24px_rgba(245,158,11,0.12)] transition-opacity group-hover:opacity-100">
                 {item.label}
                 {item.badge && <span className="ml-1 text-amber-400">🔥</span>}
             </div>
@@ -150,19 +117,20 @@ const SidebarContent: React.FC<Omit<SidebarProps, 'isOpen' | 'setIsOpen'> & { co
     }, [currentUser]);
 
     return (
-        <div className="flex h-full flex-col bg-slate-900/95 backdrop-blur-xl border-r border-white/10 shadow-2xl">
-            {/* Logo */}
-            <Logo collapsed={collapsed} />
+        <div className="flex h-full flex-col overflow-hidden rounded-r-[28px] border-r border-amber-500/10 bg-[#0b0b0d] shadow-[0_24px_80px_-48px_rgba(0,0,0,1)]">
+            <div className={`border-b border-sidebar-border ${collapsed ? 'px-3 py-5' : 'px-4 py-5'}`}>
+                <Logo collapsed={collapsed} />
+            </div>
 
             {/* Section label */}
             {!collapsed && (
                 <div className="px-4 pt-4 pb-1">
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-white/25">Main Menu</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-white/45">Main Menu</p>
                 </div>
             )}
 
             {/* Nav */}
-            <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-white/10">
+            <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-2 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-white/10">
                 {menuItems.map(item => (
                     <NavItem
                         key={item.view}
@@ -175,16 +143,16 @@ const SidebarContent: React.FC<Omit<SidebarProps, 'isOpen' | 'setIsOpen'> & { co
             </nav>
 
             {/* User footer */}
-            <div className="border-t border-white/10 p-3">
-                <div className={`rounded-xl bg-white/5 p-3 ${collapsed ? 'flex justify-center' : 'flex items-center gap-3'}`}>
+            <div className="border-t border-sidebar-border p-3">
+                <div className={`rounded-2xl border border-white/5 bg-[linear-gradient(145deg,#15181f,#0f1116)] p-3 shadow-[8px_8px_18px_rgba(0,0,0,0.42),-6px_-6px_14px_rgba(255,255,255,0.02)] ${collapsed ? 'flex justify-center' : 'flex items-center gap-3'}`}>
                     <div className="relative group flex-shrink-0">
                         <div className="h-9 w-9 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg">
                             <span className="text-xs font-bold text-white">{userInitials}</span>
                         </div>
                         {collapsed && (
-                            <div className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
+                            <div className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-lg border border-amber-500/20 bg-[#16181f] px-2.5 py-1.5 text-xs text-white opacity-0 shadow-[0_0_24px_rgba(245,158,11,0.12)] transition-opacity group-hover:opacity-100">
                                 {currentUser.name}<br />
-                                <span className="text-white/40">{currentUser.role}</span>
+                                <span className="text-[#7e8a98]">{currentUser.role}</span>
                             </div>
                         )}
                     </div>
@@ -192,13 +160,13 @@ const SidebarContent: React.FC<Omit<SidebarProps, 'isOpen' | 'setIsOpen'> & { co
                         <>
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-semibold text-white truncate">{currentUser.name}</p>
-                                <p className="text-xs text-white/40">{currentUser.role}</p>
+                                <p className="text-xs text-[#7e8a98]">{currentUser.role}</p>
                             </div>
                             <motion.button
                                 onClick={onLogout}
                                 whileHover={{ scale: 1.1 }}
                                 whileTap={{ scale: 0.9 }}
-                                className="rounded-lg p-1.5 text-white/30 hover:bg-red-500/10 hover:text-red-400 transition-colors"
+                                className="rounded-lg p-1.5 text-white/65 transition-colors hover:bg-red-500/10 hover:text-red-400"
                                 title="Logout"
                             >
                                 <div className="w-4 h-4">{ICONS.logout}</div>
@@ -212,48 +180,69 @@ const SidebarContent: React.FC<Omit<SidebarProps, 'isOpen' | 'setIsOpen'> & { co
 };
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
-const Sidebar = ({ currentView, setCurrentView, isOpen, setIsOpen, currentUser, onLogout, permissions, settings }: SidebarProps) => (
-    <>
-        {/* Desktop */}
-        <div className="hidden md:block flex-shrink-0 no-print w-64">
-            <SidebarContent
-                currentView={currentView}
-                setCurrentView={setCurrentView}
-                permissions={permissions}
-                settings={settings}
-                currentUser={currentUser}
-                onLogout={onLogout}
-            />
-        </div>
+const Sidebar = ({ currentView, setCurrentView, isOpen, setIsOpen, currentUser, onLogout, permissions, settings }: SidebarProps) => {
+    const [collapsed, setCollapsed] = useState(false);
+    const [isHovered, setIsHovered] = useState(false);
+    const effectiveCollapsed = collapsed && !isHovered;
 
-        {/* Mobile overlay */}
-        <AnimatePresence>
-            {isOpen && (
-                <div className="md:hidden no-print">
-                    <motion.div
-                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30"
-                        onClick={() => setIsOpen(false)}
-                    />
-                    <motion.div
-                        initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
-                        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                        className="fixed top-0 left-0 h-full z-40 w-64"
+    return (
+        <>
+            <div className="hidden md:block flex-shrink-0 no-print">
+                <motion.aside
+                    initial={false}
+                    animate={{ width: effectiveCollapsed ? 84 : 280 }}
+                    transition={{ type: 'spring', stiffness: 260, damping: 28 }}
+                    onHoverStart={() => setIsHovered(true)}
+                    onHoverEnd={() => setIsHovered(false)}
+                    className="relative h-full"
+                >
+                    <button
+                        type="button"
+                        onClick={() => setCollapsed((value) => !value)}
+                        className="absolute right-3 top-4 z-10 rounded-full border border-amber-500/15 bg-[#17191f] p-1.5 text-white/70 shadow-[6px_6px_14px_rgba(0,0,0,0.42),-4px_-4px_10px_rgba(255,255,255,0.02)] transition-colors hover:border-amber-400/30 hover:text-amber-200"
+                        title={effectiveCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                     >
-                        <SidebarContent
-                            currentView={currentView}
-                            setCurrentView={(v) => { setCurrentView(v); setIsOpen(false); }}
-                            permissions={permissions}
-                            settings={settings}
-                            currentUser={currentUser}
-                            onLogout={onLogout}
+                        <span className="block h-4 w-4">{effectiveCollapsed ? ICONS.chevronRight : ICONS.chevronLeft}</span>
+                    </button>
+                    <SidebarContent
+                        currentView={currentView}
+                        setCurrentView={setCurrentView}
+                        permissions={permissions}
+                        settings={settings}
+                        currentUser={currentUser}
+                        onLogout={onLogout}
+                        collapsed={effectiveCollapsed}
+                    />
+                </motion.aside>
+            </div>
+
+            <AnimatePresence>
+                {isOpen && (
+                    <div className="md:hidden no-print">
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm"
+                            onClick={() => setIsOpen(false)}
                         />
-                    </motion.div>
-                </div>
-            )}
-        </AnimatePresence>
-    </>
-);
+                        <motion.div
+                            initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
+                            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                            className="fixed left-0 top-0 z-40 h-full w-[min(18rem,calc(100vw-0.75rem))] max-w-full"
+                        >
+                            <SidebarContent
+                                currentView={currentView}
+                                setCurrentView={(v) => { setCurrentView(v); setIsOpen(false); }}
+                                permissions={permissions}
+                                settings={settings}
+                                currentUser={currentUser}
+                                onLogout={onLogout}
+                            />
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+        </>
+    );
+};
 
 export default Sidebar;
-/* Updated Tue Apr 14 19:28:09 EAT 2026 */

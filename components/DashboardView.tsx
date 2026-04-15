@@ -145,7 +145,7 @@ const DateButton: React.FC<{
 }> = ({ label, range, activeRange, onClick }) => (
     <button
         onClick={() => onClick(range)}
-        className={`rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${
+        className={`min-w-0 flex-1 rounded-xl px-3 py-2 text-center text-sm font-semibold transition-colors sm:flex-none sm:px-4 ${
             activeRange === range
                 ? 'bg-slate-900 text-white shadow-sm dark:bg-white dark:text-slate-900'
                 : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
@@ -332,9 +332,9 @@ export const DashboardView = ({ sales, products, suppliers, supplierInvoices, se
                 initial="hidden"
                 animate="visible"
             >
-                <motion.div variants={fadeInUp} className="flex flex-col gap-4 rounded-[32px] border border-white/60 bg-white/85 p-6 shadow-[0_30px_80px_-45px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                        <div className="mb-3 flex items-center gap-2">
+                <motion.div variants={fadeInUp} className="flex flex-col gap-4 rounded-[32px] border border-white/60 bg-white/85 p-5 shadow-[0_30px_80px_-45px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0">
+                        <div className="mb-3 flex flex-wrap items-center gap-2">
                             <span className="rounded-full bg-violet-500/12 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">
                                 Live Operations
                             </span>
@@ -342,19 +342,19 @@ export const DashboardView = ({ sales, products, suppliers, supplierInvoices, se
                                 {getRangeLabel(dateRange)}
                             </span>
                         </div>
-                        <h1 className="text-3xl font-bold tracking-tight text-slate-950 dark:text-white">Dashboard</h1>
+                        <h1 className="text-2xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-3xl">Dashboard</h1>
                         <p className="mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
                             {businessName} at a glance. Revenue, operating cost, inventory pressure, and supplier obligations are all in one place.
                         </p>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3">
-                        <div className="flex rounded-2xl border border-slate-200 bg-slate-50 p-1 dark:border-white/10 dark:bg-slate-950/70">
+                    <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
+                        <div className="grid w-full grid-cols-3 rounded-2xl border border-slate-200 bg-slate-50 p-1 dark:border-white/10 dark:bg-slate-950/70 sm:flex sm:w-auto">
                             <DateButton label="Today" range="today" activeRange={dateRange} onClick={setDateRange} />
                             <DateButton label="7 Days" range="7d" activeRange={dateRange} onClick={setDateRange} />
                             <DateButton label="30 Days" range="30d" activeRange={dateRange} onClick={setDateRange} />
                         </div>
-                        <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-300">
+                        <div className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-300 sm:w-auto sm:justify-start">
                             {Icons.calendar}
                             <span>{new Date().toLocaleDateString('en-GB', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                         </div>
@@ -585,8 +585,8 @@ export const DashboardView = ({ sales, products, suppliers, supplierInvoices, se
                         </DashboardCard>
                     </motion.div>
 
-                    <motion.div variants={fadeInUp} className="space-y-6">
-                        <DashboardCard>
+                    <motion.div variants={fadeInUp} className="flex h-full flex-col gap-6 xl:justify-between">
+                        <DashboardCard className="xl:flex-1">
                             <div className="mb-5 flex items-start justify-between gap-3">
                                 <div>
                                     <h2 className="text-lg font-semibold text-slate-950 dark:text-white">Operational Pressure</h2>
@@ -647,7 +647,7 @@ export const DashboardView = ({ sales, products, suppliers, supplierInvoices, se
                             </div>
                         </DashboardCard>
 
-                        <DashboardCard>
+                        <DashboardCard className="xl:mt-auto">
                             <div className="mb-5 flex items-start justify-between gap-3">
                                 <div>
                                     <h2 className="text-lg font-semibold text-slate-950 dark:text-white">Business Snapshot</h2>
@@ -657,7 +657,7 @@ export const DashboardView = ({ sales, products, suppliers, supplierInvoices, se
                                     Live
                                 </span>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-2 gap-3 xl:mt-auto">
                                 <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 dark:border-white/10 dark:bg-slate-950/45">
                                     <p className="text-xs uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Products</p>
                                     <p className="mt-2 text-2xl font-bold text-slate-950 dark:text-white">{products.length}</p>

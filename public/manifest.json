@@ -1,7 +1,7 @@
 {
   "name": "Banduka POS™ - Point of Sale System",
-  "short_name": "Banduka POS™",
-  "description": "A modern offline-capable Point of Sale system for small businesses, built by Eruns Technologies.",
+  "short_name": "Banduka POS",
+  "description": "A modern offline-capable point of sale system for Kenyan businesses.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -9,8 +9,8 @@
     "fullscreen"
   ],
   "orientation": "any",
-  "background_color": "#ffffff",
-  "theme_color": "#0D3B66",
+  "background_color": "#0f172a",
+  "theme_color": "#7c3aed",
   "lang": "en",
   "dir": "ltr",
   "categories": [
@@ -61,29 +61,6 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/screenshots/mobile-screenshot-1.png",
-      "sizes": "1080x1920",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Point of Sale Screen"
-    },
-    {
-      "src": "/screenshots/mobile-screenshot-2.png",
-      "sizes": "1080x1920",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Dashboard View"
-    },
-    {
-      "src": "/screenshots/desktop-screenshot-1.png",
-      "sizes": "1920x1080",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "Inventory Management"
     }
   ]
 }

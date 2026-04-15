@@ -1,7 +1,6 @@
-// FIX: Replaced 'Payout' with 'Expense' as 'Payout' is not an exported member of types.
 import React, { useState, useMemo, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Product, CartItem, Customer, Sale, User, SaleData, Settings, Shift, Expense, WorkOrder, SalesOrder, ToastData, SupplierPayment, BankDeposit } from '../../types';
+import { Product, CartItem, Customer, Sale, User, SaleData, Settings, Shift, Expense, WorkOrder, SalesOrder, ToastData, SupplierPayment, BankDeposit, View } from '../../types';
 import ProductGrid from './ProductGrid';
 import Cart from './Cart';
 import PaymentModal from './PaymentModal';
@@ -49,6 +48,7 @@ interface PosViewProps {
     salesOrders: SalesOrder[];
     originatingSalesOrderId: string | null;
     showToast: (message: string, type: ToastData['type']) => void;
+    onNavigate?: (view: View) => void;
 }
 
 const MotionButton = motion.button;
@@ -92,11 +92,13 @@ const PosView = ({
     salesOrders,
     originatingSalesOrderId,
     showToast,
+    onNavigate,
 }: PosViewProps) => {
     const [isPaymentModalOpen, setPaymentModalOpen] = useState(false);
     const [chargeDiscount, setChargeDiscount] = useState<{type: 'percentage' | 'fixed', value: number}>({type: 'percentage', value: 0});
     const [lastSale, setLastSale] = useState<Sale | null>(null);
     const [isCartOpen, setIsCartOpen] = useState(false);
+    const [isMoreOpen, setIsMoreOpen] = useState(false);
     const [shouldAutoPrint, setShouldAutoPrint] = useState(false);
 
     const selectedCustomer = useMemo(() => {
@@ -175,6 +177,47 @@ const PosView = ({
         shift: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 2" /></svg>,
     };
 
+    const mobilePrimaryNav = [
+        { label: 'POS', view: View.POS, icon: posIcons.cart },
+        { label: 'Inventory', view: View.Inventory, icon: posIcons.shelf },
+        { label: 'Sales', view: View.SalesHistory, icon: posIcons.cash },
+        { label: 'Reports', view: View.ProfitReport, icon: posIcons.shift },
+    ] as const;
+
+    const moreNavItems = [
+        { label: 'Dashboard', view: View.Dashboard },
+        { label: 'Customers', view: View.Customers },
+        { label: 'Suppliers', view: View.Suppliers },
+        { label: 'Accounts Payable', view: View.AccountsPayable },
+        { label: 'Purchase Orders', view: View.Purchases },
+        { label: 'Sales Orders', view: View.SalesOrderList },
+        { label: 'Quotations', view: View.Quotations },
+        { label: 'Work Orders', view: View.WorkOrderList },
+        { label: 'Layaways', view: View.LayawayList },
+        { label: 'Held Receipts', view: View.HeldReceipts },
+        { label: 'Returns', view: View.ReturnReceipt },
+        { label: 'Damaged Inventory', view: View.Inventory },
+        { label: 'Staff', view: View.Staff },
+        { label: 'Shifts', view: View.TimeSheets },
+        { label: 'Accounts & Finance', view: View.Accounts },
+        { label: 'Fiscal Period Report', view: View.FiscalPeriodReport },
+        { label: 'Tax Report', view: View.TaxReport },
+    ] as const;
+
+    React.useEffect(() => {
+        if (typeof window === 'undefined') return;
+        if (window.innerWidth >= 768) return;
+        if (cart.length > 0) {
+            setIsCartOpen(true);
+        }
+    }, [cart.length]);
+
+    const handleNavigate = (view: View) => {
+        setIsMoreOpen(false);
+        setIsCartOpen(false);
+        onNavigate?.(view);
+    };
+
     if (lastSale) {
         return <SaleSuccessView 
             sale={lastSale} 
@@ -211,7 +254,7 @@ const PosView = ({
     };
 
     return (
-        <div className="relative h-full overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,0.10),transparent_28%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.10),transparent_26%)]">
+        <div className="relative h-[100dvh] min-h-0 overflow-hidden bg-[#09090b] md:h-full md:pb-0">
             <AnimatePresence>
                  {isEndingShift && activeShift && (
                     <EndShiftModal
@@ -238,19 +281,40 @@ const PosView = ({
                 )}
             </AnimatePresence>
 
-            <div className="flex h-full flex-col">
-                <div className="border-b border-white/60 bg-white/80 px-4 py-4 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70 md:px-6">
+            <div className="flex h-full min-h-0 flex-col">
+                <div className="sticky top-0 z-20 border-b border-white/8 bg-[#0f1115] px-4 py-3 md:hidden">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <h1 className="text-lg font-bold text-white">Banduka POS</h1>
+                            <p className="text-xs text-white/45">{settings.businessInfo.name}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${activeShift ? 'bg-emerald-500/15 text-emerald-300' : 'bg-white/8 text-white/55'}`}>
+                                {activeShift ? 'Active' : 'Inactive'}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={activeShift ? onEndShiftRequest : () => setIsCartOpen(true)}
+                                className={`min-h-[44px] rounded-xl px-3 text-xs font-bold touch-manipulation ${activeShift ? 'bg-[#17191f] text-white' : 'bg-amber-500 text-black'}`}
+                            >
+                                {activeShift ? 'End Shift' : 'Start Shift in Cart'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="hidden border-b border-white/8 bg-[#0f1115] px-4 py-4 md:block md:px-6">
                     <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                         <div>
-                            <div className="mb-2 inline-flex rounded-full bg-violet-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300">
+                            <div className="mb-2 inline-flex rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-300">
                                 Point Of Sale
                             </div>
-                            <h1 className="text-2xl font-bold tracking-tight text-slate-950 dark:text-white">Checkout Workspace</h1>
-                            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                            <h1 className="text-2xl font-bold tracking-tight text-white">Checkout Workspace</h1>
+                            <p className="mt-1 text-sm text-white/50">
                                 {settings.businessInfo.name} • {activeShift ? `Shift active for ${currentUser.name}` : 'Start a shift to begin selling'}
                             </p>
                         </div>
-                        <div className={`rounded-2xl px-4 py-3 text-sm font-semibold ${isPosActive ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
+                        <div className={`rounded-2xl px-4 py-3 text-sm font-semibold ${isPosActive ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300'}`}>
                             {isPosActive ? 'POS Active' : 'Shift Required'}
                         </div>
                     </div>
@@ -263,10 +327,10 @@ const PosView = ({
                     </div>
                 </div>
 
-                <div className="flex-1 flex flex-col md:grid md:grid-cols-[1fr_auto] md:overflow-hidden relative">
+                <div className="relative flex min-h-0 flex-1 flex-col md:grid md:grid-cols-[1fr_auto] md:overflow-hidden">
                     {/* Product Grid Area: Main column, now scrolls on all screen sizes */}
-                    <div className={`flex-1 p-4 overflow-y-auto transition-opacity duration-300 md:p-6 ${!isPosActive ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
-                        <div className="rounded-[28px] border border-white/60 bg-white/82 p-3 shadow-[0_20px_60px_-40px_rgba(15,23,42,0.45)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/72 md:p-4">
+                    <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-28 transition-opacity duration-300 md:p-6 md:pb-6 ${!isPosActive ? 'pointer-events-none opacity-20' : 'opacity-100'}`}>
+                        <div className="flex min-h-full flex-col rounded-[28px] border border-white/6 bg-[#0f1115] p-3 shadow-[0_20px_60px_-40px_rgba(0,0,0,0.9)] md:min-h-0 md:p-4">
                             <ProductGrid products={products} onAddToCart={addToCart} settings={settings} />
                         </div>
                     </div>
@@ -274,18 +338,17 @@ const PosView = ({
                     {/* --- Cart Area --- */}
 
                     {/* Desktop Cart (visible on medium screens and up) */}
-                    <div className={`hidden md:flex md:w-96 flex-col min-h-0 border-l border-white/60 bg-white/84 shadow-lg backdrop-blur-xl transition-opacity duration-300 dark:border-white/10 dark:bg-slate-900/74 ${!activeShift ? 'opacity-50' : 'opacity-100'}`}>
+                    <div className={`hidden min-h-0 flex-col border-l border-white/6 bg-[#0b0b0d] shadow-lg transition-opacity duration-300 md:flex md:w-96 ${!activeShift ? 'opacity-50' : 'opacity-100'}`}>
                         <Cart {...cartProps} />
                     </div>
                 </div>
             </div>
 
-            {/* Mobile Cart FAB (visible on small screens) */}
-            <div className="md:hidden fixed bottom-6 right-6 z-20">
+            <div className="fixed bottom-20 right-4 z-30 md:hidden">
                 <MotionButton
                     onClick={() => setIsCartOpen(true)}
                     whileTap={{ scale: 0.95 }}
-                    className="bg-primary dark:bg-dark-primary text-white rounded-full p-4 flex items-center justify-center shadow-clay-light dark:shadow-clay-dark active:shadow-clay-light-inset dark:active:shadow-clay-dark-inset transition-shadow"
+                    className="flex min-h-[56px] min-w-[56px] items-center justify-center rounded-full bg-amber-500 p-4 text-black shadow-[0_0_20px_rgba(245,158,11,0.24)] transition-shadow touch-manipulation"
                     aria-label={`View Cart (${cart.length} items)`}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
@@ -299,6 +362,36 @@ const PosView = ({
                     )}
                 </MotionButton>
             </div>
+
+            <div className="fixed inset-x-0 bottom-0 z-30 border-t border-white/8 bg-[#11131c]/95 px-2 py-2 backdrop-blur-xl md:hidden">
+                <div className="grid grid-cols-5 gap-1">
+                    {mobilePrimaryNav.map((item) => (
+                        <button
+                            key={item.label}
+                            type="button"
+                            onClick={() => handleNavigate(item.view)}
+                            className="flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-xl text-white touch-manipulation"
+                        >
+                            <span className={`flex h-8 w-8 items-center justify-center rounded-full ${item.view === View.POS ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white' : 'text-white/60'}`}>
+                                {item.icon}
+                            </span>
+                            <span className={`text-[11px] leading-none text-white/75 max-[480px]:hidden ${item.view === View.POS ? 'font-semibold text-white' : ''}`}>
+                                {item.label}
+                            </span>
+                        </button>
+                    ))}
+                    <button
+                        type="button"
+                        onClick={() => setIsMoreOpen(true)}
+                        className="flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-xl text-white touch-manipulation"
+                    >
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full text-white/60">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
+                        </span>
+                        <span className="text-[11px] leading-none text-white/75 max-[480px]:hidden">More</span>
+                    </button>
+                </div>
+            </div>
             
             {/* Mobile Cart Panel (visible on small screens when isCartOpen is true) */}
             <AnimatePresence>
@@ -310,7 +403,7 @@ const PosView = ({
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             transition={{ duration: 0.3 }}
-                            className="absolute inset-0 bg-black bg-opacity-50"
+                            className="absolute inset-0 bg-black/60"
                             onClick={() => setIsCartOpen(false)}
                         />
                         
@@ -320,14 +413,57 @@ const PosView = ({
                             animate={{ y: 0 }}
                             exit={{ y: "100%" }}
                             transition={{ type: 'spring', stiffness: 400, damping: 40 }}
-                            className="absolute bottom-0 left-0 right-0 max-h-[90vh] h-auto bg-card dark:bg-dark-card rounded-t-2xl flex flex-col"
+                            className="absolute bottom-0 left-0 right-0 flex h-auto max-h-[90vh] flex-col rounded-t-2xl bg-[#0b0b0d]"
                         >
                             {/* Dragger handle to close */}
                             <div className="p-4 flex-shrink-0 cursor-grab" onPointerDown={() => setIsCartOpen(false)}>
-                                <div className="mx-auto block w-12 h-1.5 bg-border dark:bg-dark-border/50 rounded-full"></div>
+                                <div className="mx-auto block h-1.5 w-12 rounded-full bg-white/15"></div>
                             </div>
                             
                             <Cart {...cartProps} />
+                        </MotionDiv>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {isMoreOpen && (
+                    <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true">
+                        <MotionDiv
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-black/60"
+                            onClick={() => setIsMoreOpen(false)}
+                        />
+                        <MotionDiv
+                            initial={{ y: '100%' }}
+                            animate={{ y: 0 }}
+                            exit={{ y: '100%' }}
+                            transition={{ type: 'spring', stiffness: 380, damping: 34 }}
+                            className="absolute bottom-0 left-0 right-0 max-h-[75vh] rounded-t-3xl border-t border-white/8 bg-[#0f1115] px-4 pb-6 pt-4"
+                        >
+                            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-white/15" />
+                            <div className="mb-4 flex items-center justify-between">
+                                <h2 className="text-lg font-bold text-white">More</h2>
+                                <button type="button" onClick={() => setIsMoreOpen(false)} className="rounded-full p-2 text-white/60">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                            </div>
+                            <div className="overflow-y-auto">
+                                <div className="space-y-2">
+                                    {moreNavItems.map((item) => (
+                                        <button
+                                            key={item.label}
+                                            type="button"
+                                            onClick={() => handleNavigate(item.view)}
+                                            className="flex min-h-[44px] w-full items-center rounded-2xl border border-white/6 bg-[#15181f] px-4 py-3 text-left text-sm font-medium text-white/80 touch-manipulation"
+                                        >
+                                            {item.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                         </MotionDiv>
                     </div>
                 )}

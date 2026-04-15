@@ -75,7 +75,7 @@ const ForgotPasswordView: React.FC<ForgotPasswordViewProps> = ({ onFindUser, onR
         }
     };
 
-    const inputClasses = "mt-1 block w-full px-4 py-3 rounded-lg bg-background/50 dark:bg-dark-background/50 border border-border dark:border-dark-border";
+    const inputClasses = "mt-1 block w-full rounded-lg border border-white/15 bg-white/5 px-4 py-3 text-white placeholder:text-white/50 focus:border-amber-400/60 focus:outline-none";
     const buttonClasses = "w-full flex justify-center py-3 px-4 rounded-lg text-base font-bold text-primary-content bg-primary hover:bg-primary-focus disabled:bg-slate-400 dark:disabled:bg-slate-600";
 
     const renderStepContent = () => {
@@ -83,12 +83,12 @@ const ForgotPasswordView: React.FC<ForgotPasswordViewProps> = ({ onFindUser, onR
             case 'email':
                 return (
                     <Step key="email">
-                        <h1 className="text-2xl font-bold text-foreground dark:text-dark-foreground">Reset Passcode</h1>
-                        <p className="text-foreground-muted dark:text-dark-foreground-muted mt-2">Enter your email to receive a recovery code.</p>
+                        <h1 className="text-2xl font-bold text-white">Reset Passcode</h1>
+                        <p className="mt-2 text-white/70">Enter your email to receive a recovery code.</p>
                         <form onSubmit={handleEmailSubmit} className="mt-8 space-y-6">
                             <div>
-                                <label htmlFor="email-forgot" className="block text-sm font-medium text-foreground dark:text-dark-foreground">Email Address</label>
-                                <input id="email-forgot" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className={inputClasses} />
+                                <label htmlFor="email-forgot" className="block text-sm font-medium text-white">Email Address</label>
+                                <input id="email-forgot" type="email" required placeholder="Enter your email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClasses} />
                             </div>
                             <motion.button type="submit" disabled={isLoading} whileTap={{ scale: 0.98 }} className={buttonClasses}>
                                 {isLoading ? 'Searching...' : 'Send Code'}
@@ -99,12 +99,12 @@ const ForgotPasswordView: React.FC<ForgotPasswordViewProps> = ({ onFindUser, onR
             case 'otp':
                  return (
                     <Step key="otp">
-                        <h1 className="text-2xl font-bold text-foreground dark:text-dark-foreground">Enter Code</h1>
-                        <p className="text-foreground-muted dark:text-dark-foreground-muted mt-2">A 6-digit recovery code has been sent to <span className="font-semibold text-foreground dark:text-dark-foreground">{email}</span>.</p>
+                        <h1 className="text-2xl font-bold text-white">Enter Code</h1>
+                        <p className="mt-2 text-white/70">A 6-digit recovery code has been sent to <span className="font-semibold text-white">{email}</span>.</p>
                         <form onSubmit={handleOtpSubmit} className="mt-8 space-y-6">
                             <div>
-                                <label htmlFor="otp" className="block text-sm font-medium text-foreground dark:text-dark-foreground">One-Time Password</label>
-                                <input id="otp" type="text" required value={otp} onChange={(e) => setOtp(e.target.value)} className={`${inputClasses} tracking-widest text-center text-lg`} />
+                                <label htmlFor="otp" className="block text-sm font-medium text-white">One-Time Password</label>
+                                <input id="otp" type="text" required placeholder="Enter 6-digit code" value={otp} onChange={(e) => setOtp(e.target.value)} className={`${inputClasses} text-center text-lg tracking-widest`} />
                             </div>
                             <motion.button type="submit" whileTap={{ scale: 0.98 }} className={buttonClasses}>Verify Code</motion.button>
                         </form>
@@ -113,16 +113,16 @@ const ForgotPasswordView: React.FC<ForgotPasswordViewProps> = ({ onFindUser, onR
             case 'reset':
                  return (
                     <Step key="reset">
-                        <h1 className="text-2xl font-bold text-foreground dark:text-dark-foreground">Create New Passcode</h1>
-                        <p className="text-foreground-muted dark:text-dark-foreground-muted mt-2">Please enter a new passcode for your account.</p>
+                        <h1 className="text-2xl font-bold text-white">Create New Passcode</h1>
+                        <p className="mt-2 text-white/70">Please enter a new passcode for your account.</p>
                         <form onSubmit={handleResetSubmit} className="mt-8 space-y-4">
                             <div>
-                                <label htmlFor="password-reset"className="block text-sm font-medium text-foreground dark:text-dark-foreground">New Passcode</label>
-                                <input id="password-reset" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className={inputClasses}/>
+                                <label htmlFor="password-reset"className="block text-sm font-medium text-white">New Passcode</label>
+                                <input id="password-reset" type="password" required placeholder="Enter new passcode" value={password} onChange={(e) => setPassword(e.target.value)} className={inputClasses}/>
                             </div>
                             <div>
-                                <label htmlFor="confirmPassword-reset"className="block text-sm font-medium text-foreground dark:text-dark-foreground">Confirm New Passcode</label>
-                                <input id="confirmPassword-reset" type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={inputClasses}/>
+                                <label htmlFor="confirmPassword-reset"className="block text-sm font-medium text-white">Confirm New Passcode</label>
+                                <input id="confirmPassword-reset" type="password" required placeholder="Confirm new passcode" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={inputClasses}/>
                             </div>
                             <motion.button type="submit" whileTap={{ scale: 0.98 }} className={buttonClasses}>Set New Passcode</motion.button>
                         </form>

@@ -58,8 +58,7 @@ export default defineConfig(({ mode }) => {
           '@': path.resolve(__dirname, '.'),
         }
       },
-      // Netlify-specific optimizations
-      base: './',
+      base: '/',
       publicDir: 'public'
     };
 });

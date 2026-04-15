@@ -52,21 +52,21 @@ const DiscountEditor: React.FC<{
     };
 
     return (
-        <div className="absolute right-0 top-full mt-1 bg-white/50 dark:bg-dark-border/80 backdrop-blur-md p-2 rounded-lg shadow-xl z-20 w-48 border border-white/20 dark:border-white/10" onClick={e => e.stopPropagation()}>
-            <div className="flex bg-muted dark:bg-dark-muted p-0.5 rounded-md mb-2">
-                <button onClick={() => handleTypeChange('fixed')} className={`w-1/2 text-xs py-1 rounded ${type === 'fixed' ? 'bg-white dark:bg-dark-card font-bold text-primary dark:text-dark-primary' : 'text-foreground-muted'}`}>Fixed</button>
-                <button onClick={() => handleTypeChange('percentage')} className={`w-1/2 text-xs py-1 rounded ${type === 'percentage' ? 'bg-white dark:bg-dark-card font-bold text-primary dark:text-dark-primary' : 'text-foreground-muted'}`}>%</button>
+        <div className="absolute right-0 top-full z-20 mt-1 w-48 rounded-xl border border-white/8 bg-[#14161c] p-2 shadow-[0_0_24px_rgba(245,158,11,0.08)]" onClick={e => e.stopPropagation()}>
+            <div className="mb-2 flex rounded-lg bg-black/20 p-0.5">
+                <button onClick={() => handleTypeChange('fixed')} className={`w-1/2 rounded py-1 text-xs ${type === 'fixed' ? 'bg-amber-500 font-bold text-black' : 'text-white/55'}`}>Fixed</button>
+                <button onClick={() => handleTypeChange('percentage')} className={`w-1/2 rounded py-1 text-xs ${type === 'percentage' ? 'bg-amber-500 font-bold text-black' : 'text-white/55'}`}>%</button>
             </div>
             <input
                 type="number"
                 value={value}
                 onChange={(e) => { setValue(e.target.value); handleChange(e.target.value); }}
-                className="w-full p-1 border rounded-md text-sm bg-background dark:bg-dark-background border-border dark:border-dark-border"
+                className="w-full rounded-md border border-white/8 bg-[#0f1116] p-1 text-sm text-white"
                 placeholder={type === 'fixed' ? 'e.g. 100' : 'e.g. 10'}
                 autoFocus
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') onClose(); }}
             />
-            <button onClick={onClose} className="w-full mt-2 bg-primary text-primary-content text-xs font-bold py-1.5 rounded">Done</button>
+            <button onClick={onClose} className="mt-2 w-full rounded bg-amber-500 py-1.5 text-xs font-bold text-black">Done</button>
         </div>
     );
 };
@@ -145,64 +145,64 @@ const Cart = ({
     };
 
     return (
-        <div className="flex-1 flex flex-col bg-transparent relative min-h-0">
+        <div className="relative flex min-h-0 flex-1 flex-col bg-[#0b0b0d] text-white">
             <AnimatePresence>
                 {isFloatPromptOpen && (
                     <motion.div 
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="absolute inset-0 bg-white/50 dark:bg-dark-card/70 backdrop-blur-xl z-20 flex flex-col items-center justify-center p-6 space-y-4"
+                        className="absolute inset-0 z-20 flex flex-col items-center justify-center space-y-4 bg-black/70 p-6 backdrop-blur-xl"
                     >
-                        <div className="mx-auto bg-primary-soft text-primary dark:bg-dark-primary-soft dark:text-dark-primary w-16 h-16 rounded-full flex items-center justify-center mb-2">
+                        <div className="mx-auto mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/10 text-amber-300">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                         </div>
-                        <h4 className="text-lg font-bold text-foreground dark:text-dark-foreground">Enter Starting Float</h4>
+                        <h4 className="text-lg font-bold text-white">Enter Starting Float</h4>
                          <form onSubmit={handleConfirmStartShift} className="w-full space-y-4">
                             <input 
                                 type="number" 
                                 value={startingFloat} 
                                 onChange={e => setStartingFloat(e.target.value === '' ? '' : Number(e.target.value))} 
-                                className="block w-full text-center text-xl font-bold p-2 bg-background dark:bg-dark-background border border-border dark:border-dark-border rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                                className="block w-full rounded-xl border border-white/8 bg-[#121419] p-3 text-center text-xl font-bold text-white focus:border-amber-500/40 focus:outline-none"
                                 placeholder="e.g., 5000"
                                 autoFocus
                             />
                             <div className="flex space-x-2">
-                                <motion.button type="button" onClick={() => setIsFloatPromptOpen(false)} whileTap={{ scale: 0.95 }} className="flex-1 bg-muted dark:bg-dark-muted text-foreground dark:text-dark-foreground font-bold py-2 rounded-xl transition-shadow shadow-clay-light active:shadow-clay-light-inset dark:shadow-clay-dark dark:active:shadow-clay-dark-inset">Cancel</motion.button>
-                                <motion.button type="submit" whileTap={{ scale: 0.95 }} className="flex-1 bg-primary dark:bg-dark-primary text-primary-content dark:text-dark-primary-content font-bold py-2 rounded-xl transition-shadow shadow-clay-light active:shadow-clay-light-inset dark:shadow-clay-dark dark:active:shadow-clay-dark-inset">Confirm</motion.button>
+                                <motion.button type="button" onClick={() => setIsFloatPromptOpen(false)} whileTap={{ scale: 0.95 }} className="flex-1 rounded-xl bg-[#17191f] py-2 font-bold text-white shadow-[8px_8px_20px_rgba(0,0,0,0.44),-4px_-4px_12px_rgba(255,255,255,0.02)]">Cancel</motion.button>
+                                <motion.button type="submit" whileTap={{ scale: 0.95 }} className="flex-1 rounded-xl bg-amber-500 py-2 font-bold text-black shadow-[0_0_20px_rgba(245,158,11,0.24)]">Confirm</motion.button>
                             </div>
                          </form>
                     </motion.div>
                 )}
             </AnimatePresence>
 
-            <div className="p-4 border-b border-white/20 dark:border-white/10 bg-white/10 dark:bg-black/10">
+            <div className="border-b border-white/8 bg-[#111317] p-4">
                 <div className="flex justify-between items-center">
                     <div>
-                        <h3 className="font-bold text-foreground dark:text-dark-foreground">Shift Status</h3>
-                        <p className={`text-sm font-bold ${activeShift ? 'text-accent dark:text-dark-accent' : 'text-foreground-muted dark:text-dark-foreground-muted'}`}>
+                        <h3 className="font-bold text-white">Shift Status</h3>
+                        <p className={`text-sm font-bold ${activeShift ? 'text-emerald-400' : 'text-white/45'}`}>
                             {activeShift ? `Active (${new Date(activeShift.startTime).toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit', timeZone: 'Africa/Nairobi'})})` : 'Inactive'}
                         </p>
                     </div>
                     <button 
                         onClick={handleToggleClick} 
-                        className={`relative inline-flex items-center h-6 rounded-full w-11 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary shadow-clay-light-inset dark:shadow-clay-dark-inset ${activeShift ? 'bg-accent dark:bg-dark-accent' : 'bg-border dark:bg-dark-border'}`}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 ${activeShift ? 'bg-amber-500' : 'bg-white/15'}`}
                         aria-label={activeShift ? "End Shift" : "Start Shift"}
                     >
                         <motion.span 
                             layout
                             transition={{type: "spring", stiffness: 700, damping: 30}}
-                            className={`inline-block w-4 h-4 bg-white rounded-full transform transition-transform shadow-clay-light dark:shadow-clay-dark ${activeShift ? 'translate-x-6' : 'translate-x-1'}`} 
+                            className={`inline-block h-4 w-4 rounded-full bg-white transform transition-transform ${activeShift ? 'translate-x-6' : 'translate-x-1'}`} 
                         />
                     </button>
                 </div>
             </div>
 
-            <div className="p-4 border-b border-white/20 dark:border-white/10">
+            <div className="border-b border-white/8 bg-[#0f1115] p-4">
                 <div className="flex justify-between items-center mb-2">
-                    <h2 className="text-xl font-bold text-foreground dark:text-dark-foreground">Current Sale</h2>
+                    <h2 className="text-xl font-bold text-white">Current Sale</h2>
                     {cartItems.length > 0 && (
-                        <span className="text-sm font-bold bg-muted/50 dark:bg-dark-muted/50 text-foreground-muted dark:text-dark-foreground-muted px-2.5 py-1 rounded-full">
+                        <span className="rounded-full bg-white/8 px-2.5 py-1 text-sm font-bold text-white/70">
                             {cartItems.reduce((total, item) => total + item.quantity, 0)} items
                         </span>
                     )}
@@ -217,11 +217,11 @@ const Cart = ({
 
             <div className="flex-grow overflow-y-auto">
                 {cartItems.length === 0 ? (
-                    <div className="h-full flex items-center justify-center text-foreground-muted dark:text-dark-foreground-muted">
+                    <div className="flex h-full items-center justify-center text-white/40">
                         <p>Cart is empty. Add products to start.</p>
                     </div>
                 ) : (
-                    <ul className="divide-y divide-white/20 dark:divide-white/10">
+                    <ul className="divide-y divide-white/6">
                         <AnimatePresence>
                             {cartItems.map(item => {
                                 const allowFractions = FRACTIONAL_UNITS.includes(item.unitOfMeasure);
@@ -233,13 +233,13 @@ const Cart = ({
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, x: -50 }}
                                     transition={{ type: 'spring', stiffness: 500, damping: 50 }}
-                                    className="p-4 flex space-x-3"
+                                    className="flex space-x-3 bg-[#0b0b0d] p-4"
                                 >
                                     <div className="flex-grow">
-                                        <p className="font-bold text-sm text-foreground dark:text-dark-foreground">{item.name}</p>
-                                        <p className="text-xs text-foreground-muted dark:text-dark-foreground-muted">Ksh {item.price.toFixed(2)} / {item.unitOfMeasure}</p>
+                                        <p className="text-sm font-bold text-white">{item.name}</p>
+                                        <p className="text-xs text-white/45">Ksh {item.price.toFixed(2)} / {item.unitOfMeasure}</p>
                                         {item.discount && (
-                                            <p className="text-xs text-accent dark:text-dark-accent font-semibold">
+                                            <p className="text-xs font-semibold text-amber-300">
                                                 -{item.discount.type === 'fixed' ? `Ksh ${item.discount.value.toFixed(2)}` : `${item.discount.value}%`} off
                                             </p>
                                         )}
@@ -251,21 +251,21 @@ const Cart = ({
                                                 value={item.quantity}
                                                 onChange={(e) => handleQuantityInputChange(item.id, e.target.value)}
                                                 step="0.01"
-                                                className="w-20 p-1 text-center font-bold bg-transparent border border-white/20 dark:border-white/10 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                                                className="w-20 rounded-md border border-white/8 bg-[#121419] p-1 text-center font-bold text-white"
                                             />
                                         ) : (
                                             <div className="flex items-center space-x-2">
-                                                <motion.button whileTap={{ scale: 0.9 }} onClick={() => handleQuantityChange(item.id, item.quantity, -1)} className="w-6 h-6 rounded-full bg-background/50 text-foreground hover:bg-border dark:bg-dark-border/50 dark:text-dark-foreground dark:hover:bg-dark-border">-</motion.button>
-                                                <span className="font-bold w-6 text-center text-foreground dark:text-dark-foreground">{item.quantity}</span>
-                                                <motion.button whileTap={{ scale: 0.9 }} onClick={() => handleQuantityChange(item.id, item.quantity, 1)} className="w-6 h-6 rounded-full bg-background/50 text-foreground hover:bg-border dark:bg-dark-border/50 dark:text-dark-foreground dark:hover:bg-dark-border">+</motion.button>
+                                                <motion.button whileTap={{ scale: 0.9 }} onClick={() => handleQuantityChange(item.id, item.quantity, -1)} className="h-6 w-6 rounded-full bg-[#17191f] text-white hover:text-amber-200">-</motion.button>
+                                                <span className="w-6 text-center font-bold text-white">{item.quantity}</span>
+                                                <motion.button whileTap={{ scale: 0.9 }} onClick={() => handleQuantityChange(item.id, item.quantity, 1)} className="h-6 w-6 rounded-full bg-[#17191f] text-white hover:text-amber-200">+</motion.button>
                                             </div>
                                         )}
                                     </div>
                                     <div className="w-20 text-right">
                                         {item.discount ? (
                                             <>
-                                                <p className="text-xs line-through text-foreground-muted dark:text-dark-foreground-muted">Ksh {(item.price * item.quantity).toFixed(2)}</p>
-                                                <p className="font-bold text-accent dark:text-dark-accent">
+                                                <p className="text-xs line-through text-white/35">Ksh {(item.price * item.quantity).toFixed(2)}</p>
+                                                <p className="font-bold text-amber-300">
                                                     Ksh {(item.discount.type === 'fixed'
                                                         ? Math.max(0, item.price * item.quantity - item.discount.value)
                                                         : item.price * item.quantity * (1 - item.discount.value / 100)
@@ -273,12 +273,12 @@ const Cart = ({
                                                 </p>
                                             </>
                                         ) : (
-                                            <p className="font-bold text-foreground dark:text-dark-foreground">Ksh {(item.price * item.quantity).toFixed(2)}</p>
+                                            <p className="font-bold text-white">Ksh {(item.price * item.quantity).toFixed(2)}</p>
                                         )}
                                     </div>
                                     <div className="flex flex-col items-center justify-center space-y-1">
                                         <div className="relative">
-                                            <motion.button whileTap={{ scale: 0.9 }} onClick={() => setEditingDiscountFor(editingDiscountFor === item.id ? null : item.id)} className={`p-1 rounded-full ${item.discount ? 'text-accent dark:text-dark-accent' : 'text-foreground-muted dark:text-dark-foreground-muted hover:text-accent'}`}>
+                                            <motion.button whileTap={{ scale: 0.9 }} onClick={() => setEditingDiscountFor(editingDiscountFor === item.id ? null : item.id)} className={`rounded-full p-1 ${item.discount ? 'text-amber-300' : 'text-white/45 hover:text-amber-300'}`}>
                                                 {React.cloneElement(ICONS.discount, { className: 'h-5 w-5' })}
                                             </motion.button>
                                             {editingDiscountFor === item.id && (
@@ -300,10 +300,10 @@ const Cart = ({
                 )}
             </div>
             
-            <div className="p-4 border-t border-white/20 dark:border-white/10 bg-white/10 dark:bg-black/10 space-y-2">
+            <div className="space-y-2 border-t border-white/8 bg-[#111317] p-4">
                 <div className="flex justify-between text-sm">
-                    <span className="text-foreground-muted dark:text-dark-foreground-muted">Gross Subtotal</span>
-                    <span className="font-bold text-foreground dark:text-dark-foreground">Ksh {subtotal.toFixed(2)}</span>
+                    <span className="text-white/55">Gross Subtotal</span>
+                    <span className="font-bold text-white">Ksh {subtotal.toFixed(2)}</span>
                 </div>
 
                 {lineItemsDiscountAmount > 0 && (
@@ -315,13 +315,13 @@ const Cart = ({
 
                 {discountSettings.enabled && (
                     <div className="flex justify-between items-center text-sm">
-                        <span className="text-foreground-muted dark:text-dark-foreground-muted">Cart Discount ({cartDiscount.type === 'percentage' ? '%' : 'KES'})</span>
+                        <span className="text-white/55">Cart Discount ({cartDiscount.type === 'percentage' ? '%' : 'KES'})</span>
                         <input 
                           type="number"
                           value={cartDiscountValue}
                           onChange={handleCartDiscountChange}
                           max={discountSettings.maxValue}
-                          className="w-20 text-right font-bold text-foreground dark:text-dark-foreground bg-transparent border rounded-md px-2 py-1 dark:border-white/20"
+                          className="w-20 rounded-md border border-white/8 bg-[#0f1116] px-2 py-1 text-right font-bold text-white"
                         />
                     </div>
                 )}
@@ -334,12 +334,12 @@ const Cart = ({
                 )}
 
                  <div className="flex justify-between text-sm">
-                    <span className="text-foreground-muted dark:text-dark-foreground-muted">Taxable Amount</span>
-                    <span className="font-bold text-foreground dark:text-dark-foreground">Ksh {taxableAmount.toFixed(2)}</span>
+                    <span className="text-white/55">Taxable Amount</span>
+                    <span className="font-bold text-white">Ksh {taxableAmount.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                    <span className="text-foreground-muted dark:text-dark-foreground-muted">VAT ({settings.tax.vatRate}%)</span>
-                    <span className="font-bold text-foreground dark:text-dark-foreground">Ksh {tax.toFixed(2)}</span>
+                    <span className="text-white/55">VAT ({settings.tax.vatRate}%)</span>
+                    <span className="font-bold text-white">Ksh {tax.toFixed(2)}</span>
                 </div>
                  {depositApplied > 0 && (
                     <div className="flex justify-between text-sm text-accent dark:text-dark-accent">
@@ -347,10 +347,10 @@ const Cart = ({
                         <span>- Ksh {depositApplied.toFixed(2)}</span>
                     </div>
                 )}
-                <div className="rounded-xl p-4 bg-gradient-to-r from-primary to-secondary dark:from-dark-primary dark:to-dark-secondary text-primary-content dark:text-dark-primary-content animate-neural-pulse">
+                <div className="rounded-2xl border border-amber-500/15 bg-[linear-gradient(145deg,#181b22,#101216)] p-4 text-white shadow-[0_0_24px_rgba(245,158,11,0.10)]">
                     <div className="flex justify-between text-lg">
                         <span className="font-bold">Total</span>
-                        <span className="font-bold">Ksh {total.toFixed(2)}</span>
+                        <span className="font-bold text-amber-300">Ksh {total.toFixed(2)}</span>
                     </div>
                 </div>
                  <div className="flex gap-2 mt-4">
@@ -358,7 +358,7 @@ const Cart = ({
                         onClick={onHoldRequest}
                         disabled={cartItems.length === 0 || !activeShift}
                         whileTap={{ scale: 0.98 }}
-                        className="flex-1 bg-muted dark:bg-dark-background text-foreground dark:text-dark-foreground font-bold py-3 rounded-xl transition-shadow shadow-clay-light active:shadow-clay-light-inset dark:shadow-clay-dark-strong dark:active:shadow-clay-dark-inset disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:shadow-none flex items-center justify-center text-lg"
+                        className="flex flex-1 items-center justify-center rounded-xl bg-[#17191f] py-3 text-lg font-bold text-white shadow-[8px_8px_20px_rgba(0,0,0,0.44),-4px_-4px_12px_rgba(255,255,255,0.02)] disabled:bg-slate-700 disabled:text-white/40"
                      >
                         Hold
                      </motion.button>
@@ -366,7 +366,7 @@ const Cart = ({
                         onClick={onLayawayRequest}
                         disabled={cartItems.length === 0 || !activeShift}
                         whileTap={{ scale: 0.98 }}
-                        className="flex-1 bg-muted dark:bg-dark-background text-foreground dark:text-dark-foreground font-bold py-3 rounded-xl transition-shadow shadow-clay-light active:shadow-clay-light-inset dark:shadow-clay-dark-strong dark:active:shadow-clay-dark-inset disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:shadow-none flex items-center justify-center text-lg"
+                        className="flex flex-1 items-center justify-center rounded-xl bg-[#17191f] py-3 text-lg font-bold text-white shadow-[8px_8px_20px_rgba(0,0,0,0.44),-4px_-4px_12px_rgba(255,255,255,0.02)] disabled:bg-slate-700 disabled:text-white/40"
                      >
                         Layaway
                      </motion.button>
@@ -374,7 +374,7 @@ const Cart = ({
                         onClick={() => onCharge(cartDiscount)}
                         disabled={cartItems.length === 0 || !activeShift}
                         whileTap={{ scale: 0.98 }}
-                        className="flex-1 bg-primary dark:bg-dark-primary text-primary-content dark:text-dark-primary-content font-bold py-3 rounded-xl transition-shadow shadow-clay-light active:shadow-clay-light-inset dark:shadow-clay-dark-strong dark:active:shadow-clay-dark-inset disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:shadow-none flex items-center justify-center text-lg"
+                        className="flex flex-1 items-center justify-center rounded-xl bg-amber-500 py-3 text-lg font-bold text-black shadow-[0_0_20px_rgba(245,158,11,0.24)] disabled:bg-slate-700 disabled:text-white/40"
                      >
                          Charge
                          {!isOnline && <span className="text-xs ml-2">(Offline)</span>}
