@@ -7,7 +7,7 @@
   "homepage": "https://bandu-pos.netlify.app",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npx vite build",
     "preview": "vite preview",
     "lint": "echo \"ESLint not configured for static project.\"",
     "netlify:build": "npm run build",
