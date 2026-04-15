@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: bandu-pos
+    runtime: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: NODE_VERSION
+        value: 18
